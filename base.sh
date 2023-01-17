@@ -26,4 +26,4 @@ pvesh set /nodes/$NODE_NAME/qemu/$TEMPLATE_ID/firewall/options -policy_out ACCEP
 
 qm template $TEMPLATE_ID
 
-rm $DISK_IMAGE
+[ -e $DISK_IMAGE ] && rm $DISK_IMAGE
