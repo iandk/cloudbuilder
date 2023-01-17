@@ -16,7 +16,7 @@ wget $IMAGE_URL
 #########################################################
 # Image specific 
 
-virt-customize -a $DISK_IMAGE --install qemu-guest-agent --install resolvconf --update
+virt-customize -a $DISK_IMAGE --run-command 'dnf install epel-release' --install qemu-guest-agent --install resolvconf --update
 
 
 
