@@ -3,11 +3,11 @@
 IMAGE_URL="https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2"
 IMAGE_NAME="debian-11"
 DISK_IMAGE="debian-11-genericcloud-amd64.qcow2"
-TEMPLATE_ID=9009
+TEMPLATE_ID=9000
 STORAGE_NAME="local-zfs"
 
 
-rm $DISK_IMAGE
+[ -e $DISK_IMAGE ] && rm $DISK_IMAGE
 qm destroy $TEMPLATE_ID
 
 wget $IMAGE_URL
@@ -23,7 +23,7 @@ wget $IMAGE_URL
 # /run/network/interfaces.d/ens18 file
 
 
-#virt-customize -a $DISK_IMAGE --install qemu-guest-agent --install resolvconf --update --run-command 'echo "auto ens18" >> /etc/network/interfaces.d/ens18' --run-command 'echo "iface ens18 inet manual" >> /etc/network/interfaces.d/ens18'
+virt-customize -a $DISK_IMAGE --install qemu-guest-agent --install resolvconf --update --run-command 'echo "auto ens18" >> /etc/network/interfaces.d/ens18' --run-command 'echo "iface ens18 inet manual" >> /etc/network/interfaces.d/ens18'
 
 
 
