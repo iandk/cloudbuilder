@@ -6,9 +6,9 @@ read -p "Press Enter to continue, or Ctrl+C to cancel."
 apt update && apt install -y libguestfs-tools
 
 
-# bash debian.sh
+bash debian.sh
 
 bash ubuntu.sh
 
-# bash alma.sh
+bash alma.sh
 
