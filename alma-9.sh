@@ -16,7 +16,7 @@ wget $IMAGE_URL
 #########################################################
 # Image specific 
 
-virt-customize -a $DISK_IMAGE --install qemu-guest-agent --update
+virt-customize -a $DISK_IMAGE --install qemu-guest-agent --update --run-command 'sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config'
 
 
 
