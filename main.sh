@@ -1,8 +1,5 @@
 #!/bin/bash
 
-echo "This script will build Proxmox VE OS templates for Debian, Ubuntu and Alma"
-read -p "Press Enter to continue, or Ctrl+C to cancel."
-
 # Get the directory of the current script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
@@ -16,9 +13,9 @@ function ask_user_input() {
   index=1
   valid_scripts=()
   for script in "${os_template_scripts[@]}"; do
-    script_basename="$(basename $script)"
-    if [[ "$script_basename" != "main.sh" ]] && [[ "$script_basename" != "base.sh" ]]; then
-      checklist_options="${checklist_options} $index $script_basename off"
+    script_basename="$(basename "$script" .sh)"  # Remove .sh suffix from the script name
+    if [[ "$script_basename" != "main" ]] && [[ "$script_basename" != "base" ]]; then
+      checklist_options="$checklist_options $index $script_basename off"
       valid_scripts+=("$script")
       index=$((index+1))
     fi
