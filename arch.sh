@@ -3,7 +3,7 @@
 IMAGE_URL="https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
 IMAGE_NAME="arch"
 DISK_IMAGE="Arch-Linux-x86_64-cloudimg.qcow2"
-TEMPLATE_ID=9004
+TEMPLATE_ID=9005
 STORAGE_NAME="local-zfs"
 
 
