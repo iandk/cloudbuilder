@@ -18,6 +18,7 @@ virt-edit -a $DISK_IMAGE /etc/ssh/sshd_config -e 's/PasswordAuthentication no/Pa
 virt-edit -a $DISK_IMAGE /etc/ssh/sshd_config -e 's/PermitRootLogin [Nn]o/PermitRootLogin yes/'
 virt-edit -a $DISK_IMAGE /etc/ssh/sshd_config -e 's/#PermitRootLogin [Yy]es/PermitRootLogin yes/'
 virt-edit -a $DISK_IMAGE /etc/ssh/sshd_config -e 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/'
+virt-edit -a $DISK_IMAGE /etc/ssh/sshd_config.d/60-cloudimg-settings.conf -e 's/PasswordAuthentication no/PasswordAuthentication yes/'
 
 
 qm create $TEMPLATE_ID --memory 1024 --net0 virtio,bridge=vmbr0 --name $IMAGE_NAME
