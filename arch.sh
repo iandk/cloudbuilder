@@ -3,7 +3,7 @@
 IMAGE_URL="https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
 IMAGE_NAME="arch"
 DISK_IMAGE="Arch-Linux-x86_64-cloudimg.qcow2"
-TEMPLATE_ID=9005
+TEMPLATE_ID=$(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[].vmid' | awk '$0 >= 9000 && $0 < 10000 {a[$0]} END {for (i=9000; i<10000; i++) if (!(i in a)) {print i; exit}}')
 STORAGE_NAME="local-zfs"
 
 

@@ -3,7 +3,7 @@
 IMAGE_URL="http://dl.rockylinux.org/vault/rocky/9.0/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
 IMAGE_NAME="rocky-9"
 DISK_IMAGE="Rocky-9-GenericCloud.latest.x86_64.qcow2"
-TEMPLATE_ID=9004
+TEMPLATE_ID=$(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[].vmid' | awk '$0 >= 9000 && $0 < 10000 {a[$0]} END {for (i=9000; i<10000; i++) if (!(i in a)) {print i; exit}}')
 STORAGE_NAME="local-zfs"
 
 

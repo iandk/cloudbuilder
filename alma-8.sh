@@ -3,7 +3,7 @@
 IMAGE_URL="https://repo.almalinux.org/almalinux/8.7/cloud/x86_64/images/AlmaLinux-8-GenericCloud-8.7-20221111.x86_64.qcow2"
 IMAGE_NAME="alma-8"
 DISK_IMAGE="AlmaLinux-8-GenericCloud-8.7-20221111.x86_64.qcow2"
-TEMPLATE_ID=9012
+TEMPLATE_ID=$(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[].vmid' | awk '$0 >= 9000 && $0 < 10000 {a[$0]} END {for (i=9000; i<10000; i++) if (!(i in a)) {print i; exit}}')
 STORAGE_NAME="local-zfs"
 
 

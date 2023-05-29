@@ -3,6 +3,8 @@
 # Get the directory of the current script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
+apt install -y jq
+
 # Define function to ask user for input
 function ask_user_input() {
   # Get a list of available OS template scripts in the current directory

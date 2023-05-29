@@ -3,7 +3,7 @@
 IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/37/Cloud/x86_64/images/Fedora-Cloud-Base-37-1.7.x86_64.qcow2"
 IMAGE_NAME="fedora-37"
 DISK_IMAGE="Fedora-Cloud-Base-37-1.7.x86_64.qcow2"
-TEMPLATE_ID=9004
+TEMPLATE_ID=$(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[].vmid' | awk '$0 >= 9000 && $0 < 10000 {a[$0]} END {for (i=9000; i<10000; i++) if (!(i in a)) {print i; exit}}')
 STORAGE_NAME="local-zfs"
 
 

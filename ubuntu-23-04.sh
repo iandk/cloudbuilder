@@ -3,7 +3,7 @@
 IMAGE_URL="http://cloud-images.ubuntu.com/lunar/current/lunar-server-cloudimg-amd64.img"
 IMAGE_NAME="ubuntu-23-04"
 DISK_IMAGE="lunar-server-cloudimg-amd64.img"
-TEMPLATE_ID=9013
+TEMPLATE_ID=$(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[].vmid' | awk '$0 >= 9000 && $0 < 10000 {a[$0]} END {for (i=9000; i<10000; i++) if (!(i in a)) {print i; exit}}')
 STORAGE_NAME="local-zfs"
 
 
