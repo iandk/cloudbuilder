@@ -3,7 +3,7 @@
 # Get the directory of the current script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-apt install -y jq
+apt install -y jq dialog
 
 # Define function to ask user for input
 function ask_user_input() {
