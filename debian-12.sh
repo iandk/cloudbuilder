@@ -23,7 +23,7 @@ wget $IMAGE_URL
 # /run/network/interfaces.d/ens18 file
 
 
-virt-customize -a $DISK_IMAGE --install qemu-guest-agent --install cron --install resolvconf --update --run-command 'echo "auto ens18" >> /etc/network/interfaces.d/ens18' --run-command 'echo "iface ens18 inet manual" >> /etc/network/interfaces.d/ens18' --run-command '(crontab -l ; echo "*/1 * * * * pgrep -x 'qemu-guest-agent' > /dev/null || systemctl start qemu-guest-agent # Restart if failed") | crontab -'
+virt-customize -a $DISK_IMAGE --install qemu-guest-agent --install cron --update --run-command '(crontab -l ; echo "*/1 * * * * pgrep -x 'qemu-guest-agent' > /dev/null || systemctl start qemu-guest-agent # Restart if failed") | crontab -'
 
 
 
