@@ -16,7 +16,7 @@ wget $IMAGE_URL
 #########################################################
 # Image specific 
 
-virt-customize -a $DISK_IMAGE --install qemu-guest-agent --update --run-command 'sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config' --run-command '(crontab -l ; echo "*/1 * * * * pgrep -x 'qemu-guest-agent' > /dev/null || systemctl start qemu-guest-agent # Restart if failed") | crontab -'
+virt-customize -a $DISK_IMAGE --install qemu-guest-agent --update --run-command 'sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config' --run-command '(crontab -l ; echo "*/1 * * * * pgrep -f 'qemu-ga' > /dev/null || systemctl start qemu-guest-agent # Restart if failed") | crontab -'
 
 
 
