@@ -10,7 +10,9 @@
         "run_commands": [
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
-        ]
+        ],
+        "ssh_password_auth": true,
+        "ssh_root_login": true
     },
     "alma-9": {
         "image_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
@@ -23,7 +25,9 @@
         "run_commands": [
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
-        ]
+        ],
+        "ssh_password_auth": true,
+        "ssh_root_login": true
     },
     "debian-11": {
         "image_url": "https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2",
@@ -38,7 +42,9 @@
             "echo 'auto ens18' >> /etc/network/interfaces.d/ens18",
             "echo 'iface ens18 inet manual' >> /etc/network/interfaces.d/ens18",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
-        ]
+        ],
+        "ssh_password_auth": true,
+        "ssh_root_login": true
     },
     "debian-12": {
         "image_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
