@@ -216,7 +216,7 @@ for TEMPLATE in "${TEMPLATES_TO_BUILD[@]}"; do
 
     # General setup
     IMAGE_NAME="$TEMPLATE"
-    NODE_NAME=$(hostname)
+    NODE_NAME=$(hostname --short)
 
     # Conditionally allow root login and plaintext auth
     if [[ "$SSH_PASSWORD_AUTH" == "true" ]]; then
