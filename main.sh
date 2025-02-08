@@ -94,6 +94,17 @@ function verify_storage() {
 
 verify_storage
 
+function get_existing_templates() {
+    pvesh get "/nodes/$(hostname --short)/qemu" --output-format json | \
+        jq -r '.[] | select(.template==1) | "\(.vmid): \(.name)"' | \
+        sort -n
+}
+
+function get_existing_template_names() {
+    pvesh get "/nodes/$(hostname --short)/qemu" --output-format json | \
+        jq -r '.[] | select(.template==1) | .name'
+}
+
 # Read templates from templates.json
 TEMPLATES_JSON="templates.json"
 if [ ! -f "$TEMPLATES_JSON" ]; then
@@ -120,9 +131,7 @@ fi
 
 if [ "$LIST_EXISTING" = true ]; then
     echo "Existing templates in Proxmox VE:"
-    pvesh get "/nodes/$(hostname --short)/qemu" --output-format json | \
-        jq -r '.[] | select(.template==1) | "\(.vmid): \(.name)"' | \
-        sort -n
+    get_existing_templates
     exit 0
 fi
 
@@ -140,10 +149,10 @@ for TEMPLATE in "${TEMPLATES_TO_BUILD[@]}"; do
 done
 
 # Check for existing templates in Proxmox VE
-EXISTING_TEMPLATES=($(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[] | select(.template==1) | .name'))
+EXISTING_TEMPLATE_NAMES=($(get_existing_template_names))
 
 for TEMPLATE in "${TEMPLATES_TO_BUILD[@]}"; do
-    if [[ " ${EXISTING_TEMPLATES[@]} " =~ " ${TEMPLATE} " ]]; then
+    if [[ " ${EXISTING_TEMPLATE_NAMES[@]} " =~ " ${TEMPLATE} " ]]; then
         echo "Warning: Template '${TEMPLATE}' already exists in Proxmox VE. Skipping..."
         continue
     fi
