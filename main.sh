@@ -120,7 +120,9 @@ fi
 
 if [ "$LIST_EXISTING" = true ]; then
     echo "Existing templates in Proxmox VE:"
-    pvesh get /cluster/resources --type vm --output-format json | jq -r '.[] | select(.template==1) | "\(.vmid): \(.name)"'
+    pvesh get "/nodes/$(hostname --short)/qemu" --output-format json | \
+        jq -r '.[] | select(.template==1) | "\(.vmid): \(.name)"' | \
+        sort -n
     exit 0
 fi
 
