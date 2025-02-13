@@ -41,7 +41,10 @@
         "run_commands": [
             "echo 'auto ens18' >> /etc/network/interfaces.d/ens18",
             "echo 'iface ens18 inet manual' >> /etc/network/interfaces.d/ens18",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
+            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
+            "sed -i 's/^# *\\(en_US\\.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen",
+            "locale-gen",
+            "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
         ],
         "ssh_password_auth": true,
         "ssh_root_login": true
@@ -56,7 +59,10 @@
         ],
         "update_packages": true,
         "run_commands": [
-            "(crontab -l ; echo \"*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent\") | crontab -"
+            "(crontab -l ; echo \"*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent\") | crontab -",
+            "sed -i 's/^# *\\(en_US\\.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen",
+            "locale-gen",
+            "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
         ],
         "ssh_password_auth": true,
         "ssh_root_login": true
