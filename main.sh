@@ -27,6 +27,22 @@ function check_and_install_packages() {
 # Default storage name
 STORAGE_NAME="local"
 
+# Define cloudbuilder temp directory
+CLOUDBUILDER_TMP="/tmp/cloudbuilder"
+
+# Function to setup and clean temporary directory
+function setup_temp_directory() {
+    echo "Setting up temporary directory..."
+    # Remove directory if it exists
+    if [ -d "$CLOUDBUILDER_TMP" ]; then
+        echo "Cleaning up existing temporary directory..."
+        rm -rf "$CLOUDBUILDER_TMP"
+    fi
+    # Create fresh directory
+    echo "Creating temporary directory: $CLOUDBUILDER_TMP"
+    mkdir -p "$CLOUDBUILDER_TMP"
+}
+
 # Function to display usage
 function usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -151,6 +167,9 @@ done
 # Check for existing templates in Proxmox VE
 EXISTING_TEMPLATE_NAMES=($(get_existing_template_names))
 
+# Add after argument parsing and before starting the main process
+setup_temp_directory
+
 for TEMPLATE in "${TEMPLATES_TO_BUILD[@]}"; do
     if [[ " ${EXISTING_TEMPLATE_NAMES[@]} " =~ " ${TEMPLATE} " ]]; then
         echo "Warning: Template '${TEMPLATE}' already exists in Proxmox VE. Skipping..."
@@ -171,9 +190,8 @@ for TEMPLATE in "${TEMPLATES_TO_BUILD[@]}"; do
     SSH_PASSWORD_AUTH=${SSH_PASSWORD_AUTH:-false}
     SSH_ROOT_LOGIN=${SSH_ROOT_LOGIN:-false}
 
-    # Automatically derive disk image name from URL
     DISK_IMAGE=$(basename "$IMAGE_URL")
-    IMAGE_PATH="/var/tmp/$DISK_IMAGE"
+    IMAGE_PATH="$CLOUDBUILDER_TMP/$DISK_IMAGE"
 
     # Generate TEMPLATE_ID
     TEMPLATE_ID=$(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[].vmid' | awk '
@@ -290,5 +308,9 @@ for TEMPLATE in "${TEMPLATES_TO_BUILD[@]}"; do
 
     echo "Template $TEMPLATE built successfully."
 done
+
+# At the very end of the script, add cleanup
+echo "Cleaning up temporary directory..."
+rm -rf "$CLOUDBUILDER_TMP"
 
 echo "All specified templates have been processed."
