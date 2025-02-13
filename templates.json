@@ -85,8 +85,8 @@
         "ssh_password_auth": true,
         "ssh_root_login": true
     },
-    "ubuntu-23-04": {
-        "image_url": "https://cloud-images.ubuntu.com/releases/23.04/release/ubuntu-23.04-server-cloudimg-amd64.img",
+    "ubuntu-24-04": {
+        "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
         "install_packages": [
             "qemu-guest-agent",
             "resolvconf",
@@ -103,8 +103,8 @@
         "ssh_password_auth": true,
         "ssh_root_login": true
     },
-    "ubuntu-24-04": {
-        "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+    "fedora-40": {
+        "image_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2",
         "install_packages": [
             "qemu-guest-agent",
             "resolvconf",
@@ -113,10 +113,22 @@
         ],
         "update_packages": true,
         "run_commands": [
-            "systemctl enable qemu-guest-agent",
-            "systemctl start qemu-guest-agent",
-            "rm -f /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
+            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config"
+        ],
+        "ssh_password_auth": true,
+        "ssh_root_login": true
+    },
+    "fedora-41": {
+        "image_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2",
+        "install_packages": [
+            "qemu-guest-agent",
+            "resolvconf",
+            "curl",
+            "git"
+        ],
+        "update_packages": true,
+        "run_commands": [
+            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config"
         ],
         "ssh_password_auth": true,
         "ssh_root_login": true
