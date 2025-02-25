@@ -5,7 +5,7 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from rich.console import Console
 from rich.progress import (
@@ -24,7 +24,7 @@ console = Console()
 class ProxmoxManager:
     """Manages Proxmox integration for templates."""
     
-    def __init__(self, storage: str = "local", min_vmid: int = 9000):
+    def __init__(self, storage: Optional[str] = None, min_vmid: int = 9000):
         self.storage = storage
         self.min_vmid = min_vmid
         self.logger = logging.getLogger("cloudbuilder")
@@ -42,7 +42,78 @@ class ProxmoxManager:
             refresh_per_second=10,  # Lower refresh rate to reduce flickering
             disable=False
         )
+        # Find and validate storage
+        self._find_and_validate_storage()
         
+    def _find_and_validate_storage(self) -> None:
+        """Find a suitable storage if none provided, or validate the specified one."""
+        try:
+            # Get hostname first
+            hostname_result = subprocess.run(
+                ["hostname", "--short"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            hostname = hostname_result.stdout.strip()
+            
+            # Get available storage
+            result = subprocess.run(
+                ["pvesh", "get", f"/nodes/{hostname}/storage", "--output-format", "json"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            try:
+                storages = json.loads(result.stdout)
+                available_storages = [storage["storage"] for storage in storages]
+                
+                # Find storages that support VM images
+                vm_compatible_storages = []
+                for storage in storages:
+                    content = storage.get("content", "").split(",")
+                    if any(c.strip() in ["images", "rootdir"] for c in content):
+                        vm_compatible_storages.append(storage["storage"])
+                
+                # If no storage was specified, automatically select the first compatible one
+                if self.storage is None:
+                    if vm_compatible_storages:
+                        self.storage = vm_compatible_storages[0]
+                        self.logger.info(f"Automatically selected storage: '{self.storage}'")
+                    else:
+                        self.logger.error("No VM-compatible storage found in Proxmox")
+                        raise ValueError("No VM-compatible storage found in Proxmox. Please configure a storage that supports VM images.")
+                # Otherwise validate the specified storage
+                elif self.storage not in available_storages:
+                    self.logger.error(f"Storage '{self.storage}' does not exist in Proxmox")
+                    
+                    if vm_compatible_storages:
+                        self.logger.info(f"Available storages for VM templates: {', '.join(vm_compatible_storages)}")
+                    else:
+                        self.logger.info(f"Available storages (none support VM templates): {', '.join(available_storages)}")
+                    
+                    raise ValueError(f"Storage '{self.storage}' does not exist in Proxmox. "
+                                   f"Please use one of these VM-compatible storages: {', '.join(vm_compatible_storages) if vm_compatible_storages else 'None available'}")
+                
+                # Check if the selected storage supports VM images
+                storage_info = next((s for s in storages if s["storage"] == self.storage), None)
+                if storage_info:
+                    content = storage_info.get("content", "").split(",")
+                    if not any(c.strip() in ["images", "rootdir"] for c in content):
+                        self.logger.warning(f"Storage '{self.storage}' may not support VM templates (missing 'images' or 'rootdir' in content types)")
+                        self.logger.info(f"VM-compatible storages: {', '.join(vm_compatible_storages) if vm_compatible_storages else 'None available'}")
+                
+                self.logger.debug(f"Using storage '{self.storage}' for templates")
+                
+            except json.JSONDecodeError:
+                self.logger.error("Failed to parse Proxmox storage list")
+                raise
+                
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to get storage list: {e.stderr if e.stderr else e}")
+            raise
+
     def get_existing_templates(self) -> Dict[str, int]:
         """Get existing templates from Proxmox."""
         try:
@@ -176,7 +247,6 @@ class ProxmoxManager:
         """Import template into Proxmox."""
         self.logger.info(f"Importing template: {template.name}")
         
-        # First get all the information we need before showing any progress
         try:
             # Get a new VMID if needed
             if not template.vmid:
@@ -216,32 +286,37 @@ class ProxmoxManager:
                     "--memory", "1024",
                     "--net0", "virtio,bridge=vmbr0",
                     "--name", template.name,
-                    "--agent", "enabled=1"
-                ], check=True, capture_output=True)
-
-                # Import disk
-                self.logger.debug(f"Importing disk from {image_path} to storage {self.storage}")
-                import_result = subprocess.run([
-                    "qm", "importdisk", str(vmid), str(image_path), self.storage
-                ], check=True, capture_output=True, text=True)
-                
-                # Check if import was successful
-                if "successfully imported" not in import_result.stdout.lower() and "successfully imported" not in import_result.stderr.lower():
-                    self.logger.warning(f"Disk import completed but success message not found. Proceeding anyway.")
-
-                # Configure VM
-                self.logger.debug(f"Configuring VM {vmid}")
-                subprocess.run([
-                    "qm", "set", str(vmid),
+                    "--agent", "enabled=1",
                     "--scsihw", "virtio-scsi-pci",
-                    "--scsi0", f"{self.storage}:vm-{vmid}-disk-0,discard=on",
-                    "--ide2", f"{self.storage}:cloudinit",
-                    "--boot", "c",
-                    "--bootdisk", "scsi0",
                     "--serial0", "socket",
                     "--vga", "serial0",
                     "--cpu", "host"
                 ], check=True, capture_output=True)
+
+                # Import disk directly with attachment (modern approach)
+                self.logger.debug(f"Importing and attaching disk from {image_path} to storage {self.storage}")
+                import_result = subprocess.run([
+                    "qm", "set", str(vmid),
+                    "--scsi0", f"{self.storage}:0,import-from={image_path},discard=on"
+                ], check=True, capture_output=True, text=True)
+                
+                # Configure boot options
+                self.logger.debug(f"Configuring boot options for VM {vmid}")
+                subprocess.run([
+                    "qm", "set", str(vmid),
+                    "--boot", "c",
+                    "--bootdisk", "scsi0"
+                ], check=True, capture_output=True)
+                
+                # Add CloudInit drive
+                self.logger.debug(f"Adding CloudInit drive to VM {vmid}")
+                try:
+                    subprocess.run([
+                        "qm", "set", str(vmid),
+                        "--ide2", f"{self.storage}:cloudinit"
+                    ], check=True, capture_output=True)
+                except subprocess.CalledProcessError as e:
+                    self.logger.warning(f"Failed to add CloudInit drive: {e.stderr}. This may be normal if the storage doesn't support CloudInit.")
 
                 # Add build/update information
                 self.add_template_metadata(vmid, template, is_update)

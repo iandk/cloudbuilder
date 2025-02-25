@@ -32,7 +32,7 @@ def main():
     
     # Configuration arguments
     parser.add_argument("--config", default=str(paths['config_file']), help="Path to templates configuration file")
-    parser.add_argument("--storage", default="local-zfs", help="Storage location in Proxmox")
+    parser.add_argument("--storage", default=None, help="Storage location in Proxmox (if not specified, will auto-detect)")
     parser.add_argument("--template-dir", default=str(paths['template_dir']), help="Directory for storing templates")
     parser.add_argument("--temp-dir", default=str(paths['temp_dir']), help="Base directory for temporary files")
     parser.add_argument("--log-dir", default=str(paths['log_dir']), help="Directory for log files")

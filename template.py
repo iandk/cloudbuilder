@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import requests
 from rich.console import Console
@@ -46,11 +46,11 @@ class Template:
 class TemplateManager:
     """Manages template loading, building, and metadata."""
     
-    def __init__(self, config_path: str, template_dir: Path, temp_dir: Path, storage: str = "local"):
+    def __init__(self, config_path: str, template_dir: Path, temp_dir: Path, storage: Optional[str] = None):
         self.config_path = config_path
         self.template_dir = template_dir
         self.temp_dir = temp_dir
-        self.storage = storage
+        self.storage = storage  # This might be None initially and set later
         self.templates: Dict[str, Template] = {}
         self.logger = logging.getLogger("cloudbuilder")
         self.metadata_file = template_dir / "metadata.json"
