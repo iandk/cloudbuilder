@@ -10,12 +10,15 @@ from rich.logging import RichHandler
 
 from template import TemplateManager
 from proxmox import ProxmoxManager
-from utils import setup_logging, parse_template_list
+from utils import setup_logging, parse_template_list, get_installation_paths
 
 console = Console()
 
 def main():
     """Main entry point for the cloudbuilder application."""
+    # Get standard paths
+    paths = get_installation_paths()
+    
     parser = argparse.ArgumentParser(description="Proxmox Template Builder")
     
     # Core behavior arguments
@@ -28,18 +31,17 @@ def main():
     parser.add_argument("--except", dest="exclude", help="Process all templates except those specified (comma-separated list)")
     
     # Configuration arguments
-    parser.add_argument("--config", default="templates.json", help="Path to templates configuration file")
+    parser.add_argument("--config", default=str(paths['config_file']), help="Path to templates configuration file")
     parser.add_argument("--storage", default="local-zfs", help="Storage location in Proxmox")
-    parser.add_argument("--template-dir", default="/root/cloudbuilder/templates", help="Directory for storing templates")
-    parser.add_argument("--temp-dir", default="/root/cloudbuilder/tmp", help="Base directory for temporary files")
-    parser.add_argument("--log-dir", default="/root/cloudbuilder", help="Directory for log files")
+    parser.add_argument("--template-dir", default=str(paths['template_dir']), help="Directory for storing templates")
+    parser.add_argument("--temp-dir", default=str(paths['temp_dir']), help="Base directory for temporary files")
+    parser.add_argument("--log-dir", default=str(paths['log_dir']), help="Directory for log files")
     parser.add_argument("--min-vmid", type=int, default=9000, help="Minimum VMID for templates")
     
     args = parser.parse_args()
 
     # Setup logging
-    log_dir = Path(args.log_dir)
-    logger = setup_logging(log_dir)
+    logger = setup_logging(Path(args.log_dir))
     
     # Log the main header rather than using console.print
     logger.info("Proxmox Template Builder")

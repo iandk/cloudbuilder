@@ -52,3 +52,30 @@ def parse_template_list(template_list: str) -> List[str]:
         return []
         
     return [t.strip() for t in template_list.split(",") if t.strip()]
+
+def get_installation_paths():
+    """Get standard paths for cloudbuilder installation."""
+    # Resolve the real path of the script, following symlinks
+    script_path = Path(__file__).resolve()
+    install_dir = script_path.parent
+    
+    paths = {
+        'install_dir': install_dir,
+        'config_dir': install_dir,
+        'template_dir': Path('/var/lib/cloudbuilder/templates'),
+        'temp_dir': Path('/var/lib/cloudbuilder/tmp'),
+        'log_dir': Path('/var/log/cloudbuilder'),
+        'config_file': install_dir / 'templates.json',
+    }
+    
+    # Create directories if they don't exist
+    for dir_path in [paths['template_dir'], paths['temp_dir'], paths['log_dir']]:
+        dir_path.mkdir(parents=True, exist_ok=True)
+    
+    # Debug output to help diagnose path issues
+    logger = logging.getLogger("cloudbuilder")
+    logger.debug(f"Script path: {script_path}")
+    logger.debug(f"Install directory: {install_dir}")
+    logger.debug(f"Config file path: {paths['config_file']}")
+    
+    return paths
