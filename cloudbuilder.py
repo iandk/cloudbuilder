@@ -1,3 +1,4 @@
+# cloudbuilder.py
 #!/usr/bin/env python3
 from rich.table import Table
 import argparse
@@ -93,6 +94,9 @@ def main():
                 include_templates=include_templates if args.only else None,
                 exclude_templates=exclude_templates if args.exclude else None
             )
+
+        # Synchronize metadata with Proxmox state
+        template_manager.sync_metadata_with_proxmox(proxmox_templates)
 
         # Then apply template filtering
         filtered_templates = {}

@@ -1,3 +1,4 @@
+# template.py
 #!/usr/bin/env python3
 
 import json
@@ -274,3 +275,42 @@ class TemplateManager:
         self.save_metadata()
         
         return template_path
+
+    def sync_metadata_with_proxmox(self, proxmox_templates: Dict[str, int]) -> None:
+        """
+        Synchronize template metadata with actual Proxmox state.
+        
+        Args:
+            proxmox_templates: Dictionary mapping template names to VMIDs
+        """
+        self.logger.info("Synchronizing metadata with Proxmox state")
+        
+        # Track which VMIDs are assigned to which templates in Proxmox
+        vmid_to_template = {}
+        for name, vmid in proxmox_templates.items():
+            vmid_to_template[vmid] = name
+        
+        # Check for templates with incorrect VMIDs and fix them
+        for name, template in self.templates.items():
+            # If template exists in Proxmox, make sure VMID matches
+            if name in proxmox_templates:
+                actual_vmid = proxmox_templates[name]
+                if template.vmid != actual_vmid:
+                    self.logger.warning(
+                        f"Template {name} has incorrect VMID in metadata: {template.vmid} vs actual {actual_vmid}"
+                    )
+                    template.vmid = actual_vmid
+            # If template doesn't exist in Proxmox but has a VMID
+            elif template.vmid is not None:
+                # Check if this VMID is used by a different template in Proxmox
+                if template.vmid in vmid_to_template:
+                    other_template = vmid_to_template[template.vmid]
+                    self.logger.warning(
+                        f"Template {name} claims VMID {template.vmid} but that VMID belongs to {other_template}"
+                    )
+                    # Clear the VMID since this template doesn't exist in Proxmox
+                    template.vmid = None
+        
+        # Save the synchronized metadata
+        self.save_metadata()
+        self.logger.info("Metadata synchronized successfully")

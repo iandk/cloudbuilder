@@ -1,3 +1,4 @@
+# proxmox.py
 #!/usr/bin/env python3
 
 import json
@@ -152,7 +153,10 @@ class ProxmoxManager:
             return {}
 
     def remove_template(self, template: Template) -> None:
-        """Remove a template from Proxmox."""
+        """
+        Remove a template from Proxmox.
+        Does not clear the VMID as we want to preserve it for rebuilding.
+        """
         if not template.vmid:
             self.logger.warning(f"Cannot remove template {template.name} - no VMID assigned")
             return
@@ -166,13 +170,16 @@ class ProxmoxManager:
                 check=True
             )
             self.logger.debug(f"Template removal result: {result.stdout}")
+            # We intentionally DO NOT clear the VMID here to preserve it for rebuilding
+            
         except subprocess.CalledProcessError as e:
             if "does not exist" in str(e.stderr):
                 self.logger.warning(f"Template {template.name} (VMID: {template.vmid}) not found in Proxmox")
+                # We still don't clear the VMID as we want to preserve it for rebuilding
             else:
                 self.logger.error(f"Failed to remove template {template.name}: {e.stderr}")
                 raise
-
+        
     def add_template_metadata(self, vmid: int, template: Template, is_update: bool = False) -> None:
         """Add template metadata as note in Proxmox."""
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -244,16 +251,18 @@ class ProxmoxManager:
             raise
 
     def import_template(self, template: Template, image_path: Path, is_update: bool = False) -> None:
-        """Import template into Proxmox."""
+        """Import template into Proxmox, preserving the VMID if it already exists."""
         self.logger.info(f"Importing template: {template.name}")
         
         try:
-            # Get a new VMID if needed
-            if not template.vmid:
+            # For existing templates, always use their current VMID
+            # For new templates, get a new VMID
+            if template.vmid:
+                vmid = template.vmid
+                self.logger.info(f"Preserving existing VMID {vmid} for template {template.name}")
+            else:
                 vmid = self._get_next_vmid()
                 template.vmid = vmid
-            else:
-                vmid = template.vmid
                 
             self.logger.debug(f"Using VMID {vmid} for template {template.name}")
             
@@ -271,9 +280,13 @@ class ProxmoxManager:
                 )
                 
                 if check_result.returncode == 0:
-                    # VM exists, destroy it first
-                    self.logger.info(f"VM {vmid} already exists, removing it first")
+                    # VM exists, destroy it first but KEEP the same VMID
+                    self.logger.info(f"VM {vmid} already exists, removing it while preserving VMID")
+                    # Store the VMID before removal
+                    preserved_vmid = template.vmid
                     self.remove_template(template)
+                    # Restore the VMID after removal
+                    template.vmid = preserved_vmid
             except Exception as e:
                 self.logger.debug(f"Error checking VM status: {e}")
             
