@@ -22,10 +22,22 @@ def setup_logging(log_dir: Path) -> logging.Logger:
     file_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
     file_handler.setFormatter(file_formatter)
     
+    # Configure a consistent display format for the console logger
+    # Using a more minimal format without timestamps to avoid clutter
+    rich_handler = RichHandler(
+        console=console,
+        rich_tracebacks=True,
+        show_time=False,
+        level=logging.INFO,
+        markup=True,  # Enable rich markup in log messages
+        show_path=False  # Hide the file path to make output cleaner
+    )
+    
     logging.basicConfig(
         level=logging.DEBUG,
+        format="%(message)s",  # Keep console format minimal
         handlers=[
-            RichHandler(console=console, rich_tracebacks=True, show_time=False, level=logging.INFO),
+            rich_handler,
             file_handler
         ]
     )

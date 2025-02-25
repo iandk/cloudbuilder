@@ -28,15 +28,19 @@ class ProxmoxManager:
         self.storage = storage
         self.min_vmid = min_vmid
         self.logger = logging.getLogger("cloudbuilder")
+        # Create a separate progress instance with its own console 
+        # to prevent conflicts with logging outputs
         self.progress = Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=40, complete_style="green"),
+            BarColumn(bar_width=50, complete_style="green"),
             TaskProgressColumn(),
             TimeRemainingColumn(),
             console=console,
             expand=False,
-            transient=True  # Make progress bars disappear when done
+            transient=True,  # Make progress bars disappear when done
+            refresh_per_second=10,  # Lower refresh rate to reduce flickering
+            disable=False
         )
         
     def get_existing_templates(self) -> Dict[str, int]:
@@ -172,39 +176,39 @@ class ProxmoxManager:
         """Import template into Proxmox."""
         self.logger.info(f"Importing template: {template.name}")
         
-        with self.progress as progress:
-            task_id = progress.add_task(f"Importing {template.name}")
+        # First get all the information we need before showing any progress
+        try:
+            # Get a new VMID if needed
+            if not template.vmid:
+                vmid = self._get_next_vmid()
+                template.vmid = vmid
+            else:
+                vmid = template.vmid
+                
+            self.logger.debug(f"Using VMID {vmid} for template {template.name}")
             
+            # Verify image exists before proceeding
+            if not image_path.exists():
+                raise FileNotFoundError(f"Template image not found: {image_path}")
+            
+            # Check if VM already exists
             try:
-                # Get a new VMID if needed
-                if not template.vmid:
-                    vmid = self._get_next_vmid()
-                    template.vmid = vmid
-                else:
-                    vmid = template.vmid
-                    
-                self.logger.debug(f"Using VMID {vmid} for template {template.name}")
+                check_result = subprocess.run(
+                    ["qm", "status", str(vmid)],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
                 
-                # Verify image exists before proceeding
-                if not image_path.exists():
-                    raise FileNotFoundError(f"Template image not found: {image_path}")
-                
-                # Check if VM already exists
-                try:
-                    check_result = subprocess.run(
-                        ["qm", "status", str(vmid)],
-                        capture_output=True,
-                        text=True,
-                        check=False
-                    )
-                    
-                    if check_result.returncode == 0:
-                        # VM exists, destroy it first
-                        self.logger.info(f"VM {vmid} already exists, removing it first")
-                        self.remove_template(template)
-                except Exception as e:
-                    self.logger.debug(f"Error checking VM status: {e}")
-                
+                if check_result.returncode == 0:
+                    # VM exists, destroy it first
+                    self.logger.info(f"VM {vmid} already exists, removing it first")
+                    self.remove_template(template)
+            except Exception as e:
+                self.logger.debug(f"Error checking VM status: {e}")
+            
+            # Now show progress and do the actual import
+            with console.status(f"Importing {template.name}", spinner="dots") as status:
                 # Create VM
                 self.logger.debug(f"Creating VM {template.name} with VMID {vmid}")
                 subprocess.run([
@@ -250,20 +254,19 @@ class ProxmoxManager:
                     capture_output=True,
                     text=True
                 )
-                
-                self.logger.info(f"Successfully imported template {template.name} with VMID {vmid}")
-                
-            except subprocess.CalledProcessError as e:
-                error_msg = e.stderr.decode() if hasattr(e.stderr, 'decode') else str(e.stderr)
-                self.logger.error(f"Failed to import template {template.name}: {error_msg}")
-                
-                # Only cleanup if we created the VM and it failed
-                if vmid and "already exists" not in str(e.stderr):
-                    try:
-                        self.logger.warning(f"Cleaning up failed template import: destroying VMID {vmid}")
-                        subprocess.run(["qm", "destroy", str(vmid)], check=True, capture_output=True)
-                    except subprocess.CalledProcessError as cleanup_error:
-                        self.logger.warning(f"Failed to clean up VM {vmid}: {cleanup_error}")
-                raise
-            finally:
-                progress.remove_task(task_id)
+            
+            # Log success after the progress indicator is done
+            self.logger.info(f"Successfully imported template {template.name} with VMID {vmid}")
+            
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.decode() if hasattr(e.stderr, 'decode') else str(e.stderr)
+            self.logger.error(f"Failed to import template {template.name}: {error_msg}")
+            
+            # Only cleanup if we created the VM and it failed
+            if 'vmid' in locals() and "already exists" not in str(e.stderr):
+                try:
+                    self.logger.warning(f"Cleaning up failed template import: destroying VMID {vmid}")
+                    subprocess.run(["qm", "destroy", str(vmid)], check=True, capture_output=True)
+                except subprocess.CalledProcessError as cleanup_error:
+                    self.logger.warning(f"Failed to clean up VM {vmid}: {cleanup_error}")
+            raise

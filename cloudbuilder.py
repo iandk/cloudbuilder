@@ -16,8 +16,6 @@ console = Console()
 
 def main():
     """Main entry point for the cloudbuilder application."""
-    console.print("[bold]Proxmox Template Builder[/bold]")
-    
     parser = argparse.ArgumentParser(description="Proxmox Template Builder")
     
     # Core behavior arguments
@@ -42,6 +40,9 @@ def main():
     # Setup logging
     log_dir = Path(args.log_dir)
     logger = setup_logging(log_dir)
+    
+    # Log the main header rather than using console.print
+    logger.info("Proxmox Template Builder")
     
     # Parse template selection
     process_all = True
@@ -97,10 +98,10 @@ def main():
             
         # Status only mode
         if args.status:
-            console.print("\n[bold]Template Status[/bold]")
+            logger.info("Template Status")
             
-            status_table = Table(show_header=True, header_style="bold")
-            status_table.add_column("Template")
+            status_table = Table(show_header=True, header_style="bold", box=None)
+            status_table.add_column("Template", style="cyan")
             status_table.add_column("Local")
             status_table.add_column("Proxmox")
             status_table.add_column("VMID")
@@ -119,10 +120,11 @@ def main():
                     build_date, last_update
                 )
             
+            # Print table with console to keep formatting
             console.print(status_table)
             return
             
-                        # First, build all templates locally
+        # First, build all templates locally
         built_templates = {}
         
         for name, template in filtered_templates.items():
@@ -132,19 +134,16 @@ def main():
                 
                 # Determine build action based on flags
                 if args.rebuild:
-                    console.print(f"Building new version of [bold]{name}[/bold]")
                     logger.info(f"Building new version of template: {name}")
                     image_path = template_manager.build_template(template, force=True)
                     built_templates[name] = (template, image_path, exists_in_proxmox)
                     
                 elif args.update:
                     if exists_locally or exists_in_proxmox:
-                        console.print(f"Updating template [bold]{name}[/bold]")
                         logger.info(f"Building updated version of template: {name}")
                         image_path = template_manager.build_template(template, update=True)
                         built_templates[name] = (template, image_path, exists_in_proxmox)
                     else:
-                        console.print(f"Creating new template [bold]{name}[/bold]")
                         logger.info(f"Template {name} doesn't exist yet, creating it")
                         image_path = template_manager.build_template(template)
                         built_templates[name] = (template, image_path, False)
@@ -152,7 +151,6 @@ def main():
                 else:
                     # Default behavior: ensure templates exist both locally and in Proxmox
                     if not exists_locally:
-                        console.print(f"Building missing template [bold]{name}[/bold]")
                         logger.info(f"Template {name} missing locally, building it")
                         image_path = template_manager.build_template(template)
                         built_templates[name] = (template, image_path, exists_in_proxmox)
@@ -161,7 +159,7 @@ def main():
                         image_path = template_manager.get_template_path(template)
                         
                         if not exists_in_proxmox:
-                            console.print(f"Template [bold]{name}[/bold] exists locally but missing in Proxmox")
+                            logger.info(f"Template {name} exists locally but missing in Proxmox")
                             built_templates[name] = (template, image_path, False)
                         else:
                             logger.info(f"Template {name} exists in Proxmox (VMID: {template.vmid})")
@@ -170,7 +168,6 @@ def main():
                 
             except Exception as e:
                 logger.error(f"Failed to build template {name}: {e}", exc_info=True)
-                console.print(f"[red]Error:[/red] Failed to build template [bold]{name}[/bold]: {str(e)}")
                 continue
         
         # Then, import/update templates in Proxmox one by one
@@ -184,7 +181,6 @@ def main():
                     proxmox_manager.remove_template(template)
                 
                 # Import the new template
-                console.print(f"Importing template [bold]{name}[/bold] to Proxmox")
                 logger.info(f"Importing template {name} to Proxmox")
                 proxmox_manager.import_template(template, image_path, is_update=is_update)
                 
@@ -193,15 +189,12 @@ def main():
                 template_manager.save_metadata()
                 
                 logger.info(f"Successfully processed template: {name}")
-                console.print(f"Template [bold]{name}[/bold] imported with VMID {template.vmid}")
                 
             except Exception as e:
                 logger.error(f"Failed to import template {name} to Proxmox: {e}", exc_info=True)
-                console.print(f"[red]Error:[/red] Failed to import template [bold]{name}[/bold]: {str(e)}")
                 continue
         
         logger.info("Template processing completed")
-        console.print("\nTemplate processing completed")
         
     except Exception as e:
         logger.error(f"An error occurred: {e}", exc_info=True)

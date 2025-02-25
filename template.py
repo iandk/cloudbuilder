@@ -62,12 +62,14 @@ class TemplateManager:
         self.progress = Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]{task.description}"),
-            BarColumn(complete_style="green"),
+            BarColumn(bar_width=50, complete_style="green"),
             TaskProgressColumn(),
             TimeRemainingColumn(),
             console=console,
-            expand=True,
-            transient=False
+            expand=False,
+            transient=True,  # Make progress bars disappear when done
+            refresh_per_second=10,  # Lower refresh rate to reduce flickering
+            disable=False
         )
 
     def load_templates(self) -> None:
@@ -159,12 +161,7 @@ class TemplateManager:
             
             total_size = int(response.headers.get('content-length', 0))
             
-            with self.progress as progress:
-                task_id = progress.add_task(
-                    f"Downloading {template.name}",
-                    total=max(total_size, DOWNLOAD_TIMEOUT) if total_size else DOWNLOAD_TIMEOUT
-                )
-                
+            with console.status(f"Downloading {template.name}", spinner="dots") as status:
                 start_time = time.time()
                 downloaded = 0
                 
@@ -175,14 +172,7 @@ class TemplateManager:
                         
                         f.write(chunk)
                         downloaded += len(chunk)
-                        
-                        if total_size:
-                            progress.update(task_id, completed=downloaded)
-                        else:
-                            elapsed = int(time.time() - start_time)
-                            progress.update(task_id, completed=min(elapsed, DOWNLOAD_TIMEOUT))
                 
-                progress.remove_task(task_id)
                 return temp_file
                 
         except requests.exceptions.RequestException as e:
@@ -201,40 +191,40 @@ class TemplateManager:
             if temp_file.exists():
                 temp_file.unlink()
             raise
-
+    
     def customize_image(self, template: Template, image_path: Path, update_mode: bool = False) -> None:
-        """Customize the image using virt-customize with timeout and progress indication."""
+        """Customize the image using virt-customize with a simple status indicator."""
         self.logger.info(f"Customizing image for {template.name}")
         
-        with self.progress as progress:
-            task_id = progress.add_task(f"Customizing {template.name}", total=CUSTOMIZE_TIMEOUT)
-            
-            commands = []
-            if template.update_packages or update_mode:
-                commands.extend(["--update"])
-            
-            if template.install_packages:
-                commands.extend(["--install", ",".join(template.install_packages)])
-            
-            for cmd in template.run_commands:
-                commands.extend(["--run-command", cmd])
+        commands = []
+        if template.update_packages or update_mode:
+            commands.extend(["--update"])
+        
+        if template.install_packages:
+            commands.extend(["--install", ",".join(template.install_packages)])
+        
+        for cmd in template.run_commands:
+            commands.extend(["--run-command", cmd])
 
-            if template.ssh_password_auth:
-                commands.extend([
-                    "--run-command", 
-                    "sed -i 's/^#*PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
-                ])
+        if template.ssh_password_auth:
+            commands.extend([
+                "--run-command", 
+                "sed -i 's/^#*PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
+            ])
 
-            if template.ssh_root_login:
-                commands.extend([
-                    "--run-command",
-                    "sed -i 's/^#*PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config"
-                ])
+        if template.ssh_root_login:
+            commands.extend([
+                "--run-command",
+                "sed -i 's/^#*PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config"
+            ])
 
-            process = None
-            try:
-                # Start the customization process
-                self.logger.debug(f"Running virt-customize on {image_path}")
+        process = None
+        try:
+            # Start the customization process
+            self.logger.debug(f"Running virt-customize on {image_path}")
+            
+            # Use console.status instead of progress bar
+            with console.status(f"Customizing {template.name}", spinner="dots") as status:
                 process = subprocess.Popen(
                     ["virt-customize", "-a", str(image_path)] + commands,
                     stdout=subprocess.PIPE,
@@ -248,8 +238,6 @@ class TemplateManager:
                     if elapsed >= CUSTOMIZE_TIMEOUT:
                         process.kill()
                         raise TimeoutError(f"Customization timeout after {CUSTOMIZE_TIMEOUT} seconds")
-                    
-                    progress.update(task_id, completed=min(elapsed, CUSTOMIZE_TIMEOUT))
                     time.sleep(1)
                 
                 stdout, stderr = process.communicate()
@@ -258,24 +246,19 @@ class TemplateManager:
                     error_msg = f"virt-customize failed with code {process.returncode}: {stderr}"
                     self.logger.error(error_msg)
                     raise RuntimeError(error_msg)
-                
-                # Complete the progress bar
-                progress.update(task_id, completed=CUSTOMIZE_TIMEOUT)
-                
-                # Update build information after successful customization
-                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                if update_mode and template.build_date:
-                    template.last_update = current_time
-                else:
-                    template.build_date = current_time
-                
-            except Exception as e:
-                self.logger.error(f"Failed to customize image for {template.name}: {str(e)}")
-                if process and process.poll() is None:
-                    process.kill()
-                raise
-            finally:
-                progress.remove_task(task_id)
+            
+            # Update build information after successful customization
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if update_mode and template.build_date:
+                template.last_update = current_time
+            else:
+                template.build_date = current_time
+            
+        except Exception as e:
+            self.logger.error(f"Failed to customize image for {template.name}: {str(e)}")
+            if process and process.poll() is None:
+                process.kill()
+            raise
 
     def build_template(self, template: Template, update: bool = False, force: bool = False) -> Path:
         """Build template and return the path to the built image."""
