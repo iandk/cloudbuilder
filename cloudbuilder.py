@@ -1,5 +1,5 @@
-# cloudbuilder.py
 #!/usr/bin/env python3
+# cloudbuilder.py
 from rich.table import Table
 import argparse
 import logging
