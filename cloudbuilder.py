@@ -10,7 +10,7 @@ from rich.logging import RichHandler
 
 from template import TemplateManager
 from proxmox import ProxmoxManager
-from utils import setup_logging, parse_template_list, get_installation_paths
+from utils import setup_logging, parse_template_list, get_installation_paths, validate_template_selection
 
 console = Console()
 
@@ -84,7 +84,17 @@ def main():
         template_manager.load_templates()
         proxmox_templates = proxmox_manager.get_existing_templates()
         
-        # Apply template filtering
+        # Validate template selection first
+        if args.only or args.exclude:
+            # Verify that all specified templates exist
+            validate_template_selection(
+                logger=logger,
+                available_templates=template_manager.templates,
+                include_templates=include_templates if args.only else None,
+                exclude_templates=exclude_templates if args.exclude else None
+            )
+
+        # Then apply template filtering
         filtered_templates = {}
         for name, template in template_manager.templates.items():
             if (process_all or name in include_templates) and name not in exclude_templates:

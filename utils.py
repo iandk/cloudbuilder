@@ -2,7 +2,8 @@
 
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Any
+import sys
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -79,3 +80,37 @@ def get_installation_paths():
     logger.debug(f"Config file path: {paths['config_file']}")
     
     return paths
+
+def validate_template_selection(
+    logger: logging.Logger, 
+    available_templates: Dict[str, Any], 
+    include_templates: List[str] = None, 
+    exclude_templates: List[str] = None
+) -> None:
+    """
+    Validate that all specified templates exist in the available templates.
+    
+    Args:
+        logger: Logger instance
+        available_templates: Dictionary of available templates
+        include_templates: List of templates to include (--only)
+        exclude_templates: List of templates to exclude (--except)
+        
+    Raises:
+        SystemExit: If any specified templates don't exist
+    """
+    all_template_names = set(available_templates.keys())
+    
+    if include_templates:
+        missing_templates = [t for t in include_templates if t not in all_template_names]
+        if missing_templates:
+            logger.error(f"Error: The following specified templates do not exist: {', '.join(missing_templates)}")
+            logger.info(f"Available templates: {', '.join(sorted(all_template_names))}")
+            sys.exit(1)
+    
+    if exclude_templates:
+        missing_templates = [t for t in exclude_templates if t not in all_template_names]
+        if missing_templates:
+            logger.error(f"Error: The following excluded templates do not exist: {', '.join(missing_templates)}")
+            logger.info(f"Available templates: {', '.join(sorted(all_template_names))}")
+            sys.exit(1)
