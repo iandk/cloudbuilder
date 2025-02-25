@@ -1,3 +1,4 @@
 templates/*
 tmp/*
 cloudbuilder.log
+__pycache__/*
