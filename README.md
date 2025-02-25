@@ -121,9 +121,9 @@ Create a `templates.json` file in the current directory:
 | `--except LIST` | Process all templates except specified ones (comma-separated) |
 | `--config PATH` | Path to templates configuration file (default: templates.json) |
 | `--storage NAME` | Storage location in Proxmox (if not specified, will auto-detect) |
-| `--template-dir PATH` | Directory for storing templates (default: /root/cloudbuilder/templates) |
-| `--temp-dir PATH` | Base directory for temporary files (default: /root/cloudbuilder/tmp) |
-| `--log-dir PATH` | Directory for log files (default: /root/cloudbuilder) |
+| `--template-dir PATH` | Directory for storing templates (default: /var/lib/cloudbuilder/templates) |
+| `--temp-dir PATH` | Base directory for temporary files (default: /var/lib/cloudbuilder/tmp) |
+| `--log-dir PATH` | Directory for log files (default: /var/log/cloudbuilder) |
 | `--min-vmid NUM` | Minimum VMID for templates (default: 9000) |
 
 ## Storage Detection
