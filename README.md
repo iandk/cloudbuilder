@@ -9,6 +9,7 @@ CloudBuilder is a tool for managing VM templates in Proxmox. It automates downlo
 - **Template Filtering**: Process only specific templates with `--only` and `--except`
 - **Status Reporting**: Show template status without making changes
 - **Metadata Tracking**: Track build dates, update dates, and VMIDs
+- **Automatic Storage Detection**: Automatically selects compatible Proxmox storage
 
 ## Requirements
 
@@ -102,7 +103,7 @@ Create a `templates.json` file in the current directory:
 # Specify custom paths
 ./cloudbuilder.py --config /path/to/templates.json --template-dir /path/to/templates --temp-dir /path/to/tmp
 
-# Specify Proxmox storage
+# Specify Proxmox storage (overrides automatic detection)
 ./cloudbuilder.py --storage local-zfs
 
 # Set minimum VMID
@@ -119,11 +120,22 @@ Create a `templates.json` file in the current directory:
 | `--only LIST` | Process only specific templates (comma-separated) |
 | `--except LIST` | Process all templates except specified ones (comma-separated) |
 | `--config PATH` | Path to templates configuration file (default: templates.json) |
-| `--storage NAME` | Storage location in Proxmox (default: local-zfs) |
+| `--storage NAME` | Storage location in Proxmox (if not specified, will auto-detect) |
 | `--template-dir PATH` | Directory for storing templates (default: /root/cloudbuilder/templates) |
 | `--temp-dir PATH` | Base directory for temporary files (default: /root/cloudbuilder/tmp) |
 | `--log-dir PATH` | Directory for log files (default: /root/cloudbuilder) |
 | `--min-vmid NUM` | Minimum VMID for templates (default: 9000) |
+
+## Storage Detection
+
+CloudBuilder automatically detects and selects a compatible Proxmox storage for VM templates. It:
+
+1. Scans available storages in your Proxmox environment
+2. Identifies storages that support VM images (content types "images" or "rootdir")
+3. Selects the first compatible storage found
+4. Logs which storage was selected
+
+You can override automatic detection by specifying a storage with `--storage`.
 
 ## Metadata
 
