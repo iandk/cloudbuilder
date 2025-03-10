@@ -11,8 +11,8 @@
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     },
     "alma-9": {
         "image_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
@@ -26,8 +26,8 @@
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     },
     "debian-11": {
         "image_url": "https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2",
@@ -46,8 +46,8 @@
             "locale-gen",
             "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     },
     "debian-12": {
         "image_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
@@ -64,8 +64,8 @@
             "locale-gen",
             "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     },
     "ubuntu-22-04": {
         "image_url": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
@@ -82,8 +82,8 @@
             "rm -f /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     },
     "ubuntu-24-04": {
         "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
@@ -100,8 +100,8 @@
             "rm -f /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     },
     "fedora-40": {
         "image_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2",
@@ -115,8 +115,8 @@
         "run_commands": [
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     },
     "fedora-41": {
         "image_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2",
@@ -130,7 +130,7 @@
         "run_commands": [
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     }
 }
