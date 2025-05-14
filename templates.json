@@ -9,7 +9,8 @@
         "update_packages": true,
         "run_commands": [
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
+            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
+            "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
         ],
         "ssh_password_auth": false,
         "ssh_root_login": false
@@ -24,7 +25,8 @@
         "update_packages": true,
         "run_commands": [
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
+            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
+            "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
         ],
         "ssh_password_auth": false,
         "ssh_root_login": false
