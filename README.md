@@ -22,7 +22,7 @@ CloudBuilder is a tool for managing VM templates in Proxmox. It automates downlo
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cloudbuilder.git
+cd /opt && git clone https://github.com/iandk/cloudbuilder.git
 cd cloudbuilder
 
 # Install dependencies
@@ -30,6 +30,9 @@ pip install -r requirements.txt
 
 # Make script executable
 chmod +x cloudbuilder.py
+
+# Create symlink
+ln -s /opt/cloudbuilder/cloudbuilder.py /usr/local/bin/cloudbuilder
 ```
 
 ## Configuration
