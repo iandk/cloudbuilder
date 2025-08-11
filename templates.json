@@ -69,6 +69,24 @@
         "ssh_password_auth": false,
         "ssh_root_login": false
     },
+    "debian-13": {
+        "image_url": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
+        "install_packages": [
+            "qemu-guest-agent",
+            "curl",
+            "git",
+            "cron"
+        ],
+        "update_packages": true,
+        "run_commands": [
+            "(crontab -l ; echo \"*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent\") | crontab -",
+            "sed -i 's/^# *\\(en_US\\.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen",
+            "locale-gen",
+            "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
+        ],
+        "ssh_password_auth": false,
+        "ssh_root_login": false
+    },
     "ubuntu-22-04": {
         "image_url": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
         "install_packages": [
