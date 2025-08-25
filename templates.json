@@ -40,7 +40,11 @@
         ],
         "update_packages": true,
         "run_commands": [
+            "command -v crb >/dev/null && sudo crb enable || sudo dnf config-manager --set-enabled crb",
+            "sudo dnf install -y epel-release || sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm",
+            "sudo dnf -y makecache",
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
+            "sudo systemctl enable --now qemu-guest-agent",
             "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
             "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
         ],
