@@ -40,12 +40,12 @@
         ],
         "update_packages": true,
         "run_commands": [
-            "command -v crb >/dev/null && sudo crb enable || sudo dnf config-manager --set-enabled crb",
+            "command -v crb >/dev/null 2>&1 && sudo crb enable || (sudo dnf -y install dnf-plugins-core && sudo dnf config-manager --set-enabled crb)",
             "sudo dnf install -y epel-release || sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm",
             "sudo dnf -y makecache",
             "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
-            "sudo systemctl enable --now qemu-guest-agent",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
+            "sudo systemctl enable qemu-guest-agent || sudo ln -sf /usr/lib/systemd/system/qemu-guest-agent.service /etc/systemd/system/multi-user.target.wants/qemu-guest-agent.service",
+            "(crontab -l 2>/dev/null; echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || systemctl start qemu-guest-agent') | crontab -",
             "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
         ],
         "ssh_password_auth": false,
