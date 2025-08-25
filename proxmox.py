@@ -80,13 +80,17 @@ class ProxmoxManager:
 
             try:
                 storages = json.loads(result.stdout)
-                available_storages = [storage["storage"] for storage in storages]
+                all_storage_names = [s["storage"] for s in storages]
 
-                # Find storages that support VM images
+                # Find active, enabled, and VM-compatible storages
                 vm_compatible_storages = []
                 for storage in storages:
+                    is_active = storage.get("active", 0) == 1
+                    is_enabled = storage.get("enabled", 0) == 1
                     content = storage.get("content", "").split(",")
-                    if any(c.strip() in ["images", "rootdir"] for c in content):
+                    is_compatible = any(c.strip() in ["images", "rootdir"] for c in content)
+
+                    if is_active and is_enabled and is_compatible:
                         vm_compatible_storages.append(storage["storage"])
 
                 # If no storage was specified, automatically select the first compatible one
@@ -95,28 +99,22 @@ class ProxmoxManager:
                         self.storage = vm_compatible_storages[0]
                         self.logger.info(f"Automatically selected storage: '{self.storage}'")
                     else:
-                        self.logger.error("No VM-compatible storage found in Proxmox")
-                        raise ValueError("No VM-compatible storage found in Proxmox. Please configure a storage that supports VM images.")
-                # Otherwise validate the specified storage
-                elif self.storage not in available_storages:
-                    self.logger.error(f"Storage '{self.storage}' does not exist in Proxmox")
-
+                        self.logger.error("No active, enabled, and VM-compatible storage found in Proxmox.")
+                        raise ValueError("No active and compatible storage found. Please configure a storage that supports VM images.")
+                
+                # If storage was specified, validate it
+                elif self.storage not in all_storage_names:
+                    self.logger.error(f"Storage '{self.storage}' does not exist in Proxmox.")
                     if vm_compatible_storages:
-                        self.logger.info(f"Available storages for VM templates: {', '.join(vm_compatible_storages)}")
-                    else:
-                        self.logger.info(f"Available storages (none support VM templates): {', '.join(available_storages)}")
+                         self.logger.info(f"Available storages for VM templates: {', '.join(vm_compatible_storages)}")
+                    raise ValueError(f"Specified storage '{self.storage}' does not exist.")
 
-                    raise ValueError(f"Storage '{self.storage}' does not exist in Proxmox. "
-                                     f"Please use one of these VM-compatible storages: {', '.join(vm_compatible_storages) if vm_compatible_storages else 'None available'}")
-
-                # Check if the selected storage supports VM images
-                storage_info = next((s for s in storages if s["storage"] == self.storage), None)
-                if storage_info:
-                    content = storage_info.get("content", "").split(",")
-                    if not any(c.strip() in ["images", "rootdir"] for c in content):
-                        self.logger.warning(f"Storage '{self.storage}' may not support VM templates (missing 'images' or 'rootdir' in content types)")
-                        self.logger.info(f"VM-compatible storages: {', '.join(vm_compatible_storages) if vm_compatible_storages else 'None available'}")
-
+                elif self.storage not in vm_compatible_storages:
+                    self.logger.error(f"Specified storage '{self.storage}' is not active, enabled, or compatible for VM images.")
+                    if vm_compatible_storages:
+                         self.logger.info(f"Available storages for VM templates: {', '.join(vm_compatible_storages)}")
+                    raise ValueError(f"Specified storage '{self.storage}' is not suitable for VM templates.")
+                
                 self.logger.debug(f"Using storage '{self.storage}' for templates")
 
             except json.JSONDecodeError:
