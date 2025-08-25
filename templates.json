@@ -1,20 +1,4 @@
 {
-    "alma-8": {
-        "image_url": "https://repo.almalinux.org/almalinux/8/cloud/x86_64/images/AlmaLinux-8-GenericCloud-latest.x86_64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
-            "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
     "alma-9": {
         "image_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
         "install_packages": [
@@ -50,26 +34,6 @@
             "sudo systemctl enable sshd",
             "(crontab -l 2>/dev/null; echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || systemctl start qemu-guest-agent') | crontab -",
             "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
-    "debian-11": {
-        "image_url": "https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "resolvconf",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "echo 'auto ens18' >> /etc/network/interfaces.d/ens18",
-            "echo 'iface ens18 inet manual' >> /etc/network/interfaces.d/ens18",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
-            "sed -i 's/^# *\\(en_US\\.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen",
-            "locale-gen",
-            "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
         ],
         "ssh_password_auth": false,
         "ssh_root_login": false
@@ -164,23 +128,8 @@
         "ssh_password_auth": false,
         "ssh_root_login": false
     },
-    "fedora-40": {
-        "image_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "resolvconf",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
-    "fedora-41": {
-        "image_url": "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2",
+    "fedora-42": {
+        "image_url": "https://ftp.fau.de/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2",
         "install_packages": [
             "qemu-guest-agent",
             "resolvconf",
