@@ -208,11 +208,11 @@ def main():
         # Then, import/update templates in Proxmox one by one
         for name, (template, image_path, exists_in_proxmox) in built_templates.items():
             try:
-                # Determine if this operation is an update/rebuild of an existing Proxmox template
-                is_update_rebuild_operation = (args.update or args.rebuild) and exists_in_proxmox
+                # If a template is being imported and already exists in Proxmox, it's an overwrite.
+                is_overwrite_operation = exists_in_proxmox
 
-                if is_update_rebuild_operation:
-                    logger.info(f"Preparing to update/rebuild template {name} (VMID: {template.vmid}) in Proxmox.")
+                if is_overwrite_operation:
+                    logger.info(f"Preparing to overwrite existing template {name} (VMID: {template.vmid}) in Proxmox.")
                     # Upfront check should have caught linked clones. Now safe to remove.
                     logger.info(f"Removing existing template {name} (VMID: {template.vmid}) from Proxmox before import.")
                     proxmox_manager.remove_template(template)
