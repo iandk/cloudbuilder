@@ -31,6 +31,22 @@
         "ssh_password_auth": false,
         "ssh_root_login": false
     },
+    "alma-10": {
+        "image_url": "https://raw.repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-latest.x86_64.qcow2",
+        "install_packages": [
+            "qemu-guest-agent",
+            "curl",
+            "git"
+        ],
+        "update_packages": true,
+        "run_commands": [
+            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
+            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
+            "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
+        ],
+        "ssh_password_auth": false,
+        "ssh_root_login": false
+    },
     "debian-11": {
         "image_url": "https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-genericcloud-amd64.qcow2",
         "install_packages": [
