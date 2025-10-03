@@ -31,18 +31,6 @@ fi
 ln -sf "$INSTALL_DIR/cloudbuilder.py" /usr/local/bin/cloudbuilder
 chmod +x "$INSTALL_DIR/cloudbuilder.py"
 
-# Check Debian version and upgrade rich appropriately
-DEBIAN_VERSION=$(grep VERSION_ID /etc/os-release | cut -d '"' -f2)
-
-echo "Detected Debian version: $DEBIAN_VERSION"
-
-if [[ "$DEBIAN_VERSION" == "12" ]]; then
-    echo "Upgrading rich using pip with --break-system-packages..."
-    pip3 install --upgrade rich --break-system-packages
-else
-    echo "Upgrading rich using pip with --user (safe fallback)..."
-    pip3 install --upgrade --user rich
-fi
 
 echo "Cloudbuilder installed successfully."
 echo "Configuration file: $INSTALL_DIR/templates.json"
