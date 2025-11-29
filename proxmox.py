@@ -403,6 +403,15 @@ class ProxmoxManager:
                 except subprocess.CalledProcessError as e:
                     self.logger.warning(f"Failed to add CloudInit drive: {e.stderr}. This may be normal if the storage doesn't support CloudInit.")
 
+                # Enable firewall with IP filter and MAC filter
+                self.logger.debug(f"Enabling firewall with IP/MAC filtering for VM {vmid}")
+                subprocess.run([
+                    "pvesh", "set", f"/nodes/{self.node}/qemu/{vmid}/firewall/options",
+                    "--enable", "1",
+                    "--ipfilter", "1",
+                    "--macfilter", "1"
+                ], check=True, capture_output=True)
+
                 # Add build/update information
                 self.add_template_metadata(vmid, template, is_update)
 
