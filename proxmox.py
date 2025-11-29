@@ -242,6 +242,101 @@ class ProxmoxManager:
         self.logger.debug(f"No linked clones found for VMID {vmid} referencing base disks {template_base_disk_volids} on storage '{self.storage}'.")
         return False
 
+    def get_firewall_settings(self, vmid: int) -> Dict[str, Any]:
+        """Get current firewall settings for a VM/template."""
+        try:
+            result = subprocess.run(
+                ["pvesh", "get", f"/nodes/{self.node}/qemu/{vmid}/firewall/options", "--output-format", "json"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return json.loads(result.stdout)
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to get firewall settings for VMID {vmid}: {e.stderr if e.stderr else e}")
+            return {}
+        except json.JSONDecodeError:
+            self.logger.error(f"Failed to parse firewall settings for VMID {vmid}")
+            return {}
+
+    def _get_vm_config(self, vmid: int) -> Dict[str, Any]:
+        """Get VM configuration."""
+        try:
+            result = subprocess.run(
+                ["pvesh", "get", f"/nodes/{self.node}/qemu/{vmid}/config", "--output-format", "json"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return json.loads(result.stdout)
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to get VM config for VMID {vmid}: {e.stderr if e.stderr else e}")
+            return {}
+        except json.JSONDecodeError:
+            self.logger.error(f"Failed to parse VM config for VMID {vmid}")
+            return {}
+
+    def ensure_firewall_settings(self, vmid: int, name: str = "") -> bool:
+        """
+        Check and apply firewall settings (enable, ipfilter, macfilter) and NIC firewall if not already set.
+        Returns True if settings were applied or already correct, False on error.
+        """
+        display_name = f"{name} (VMID: {vmid})" if name else f"VMID {vmid}"
+        success = True
+
+        # Check and apply VM-level firewall options
+        current_settings = self.get_firewall_settings(vmid)
+        if not current_settings:
+            self.logger.warning(f"Could not retrieve firewall settings for {display_name}")
+            success = False
+        else:
+            enable = current_settings.get("enable", 0)
+            ipfilter = current_settings.get("ipfilter", 0)
+            macfilter = current_settings.get("macfilter", 0)
+
+            if enable == 1 and ipfilter == 1 and macfilter == 1:
+                self.logger.debug(f"VM firewall settings already correct for {display_name}")
+            else:
+                self.logger.info(f"Applying VM firewall settings to {display_name} (enable={enable}->1, ipfilter={ipfilter}->1, macfilter={macfilter}->1)")
+                try:
+                    subprocess.run([
+                        "pvesh", "set", f"/nodes/{self.node}/qemu/{vmid}/firewall/options",
+                        "--enable", "1",
+                        "--ipfilter", "1",
+                        "--macfilter", "1"
+                    ], check=True, capture_output=True)
+                    self.logger.info(f"Successfully applied VM firewall settings to {display_name}")
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(f"Failed to apply VM firewall settings to {display_name}: {e.stderr if e.stderr else e}")
+                    success = False
+
+        # Check and apply NIC-level firewall setting
+        vm_config = self._get_vm_config(vmid)
+        if not vm_config:
+            self.logger.warning(f"Could not retrieve VM config for {display_name}")
+            return False
+
+        net0_config = vm_config.get("net0", "")
+        if net0_config:
+            # Check if firewall=1 is already in the net0 config
+            if "firewall=1" in net0_config:
+                self.logger.debug(f"NIC firewall already enabled for {display_name}")
+            else:
+                # Need to add firewall=1 to the existing net0 config
+                new_net0_config = f"{net0_config},firewall=1"
+                self.logger.info(f"Enabling NIC firewall for {display_name}")
+                try:
+                    subprocess.run([
+                        "qm", "set", str(vmid),
+                        "--net0", new_net0_config
+                    ], check=True, capture_output=True)
+                    self.logger.info(f"Successfully enabled NIC firewall for {display_name}")
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(f"Failed to enable NIC firewall for {display_name}: {e.stderr if e.stderr else e}")
+                    success = False
+
+        return success
+
     def remove_template(self, template: Template) -> None:
         """
         Remove a template from Proxmox.
@@ -369,7 +464,7 @@ class ProxmoxManager:
                 subprocess.run([
                     "qm", "create", str(vmid),
                     "--memory", "1024",
-                    "--net0", "virtio,bridge=vmbr0",
+                    "--net0", "virtio,bridge=vmbr0,firewall=1",
                     "--name", template.name,
                     "--agent", "enabled=1",
                     "--scsihw", "virtio-scsi-pci",

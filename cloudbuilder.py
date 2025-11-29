@@ -198,6 +198,8 @@ def main():
                             built_templates[name] = (template, image_path, False)
                         else:
                             logger.info(f"Template {name} exists in Proxmox (VMID: {template.vmid})")
+                            # Ensure firewall settings are correct for existing templates
+                            proxmox_manager.ensure_firewall_settings(template.vmid, name)
 
                 template_manager.save_metadata()
 
