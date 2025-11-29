@@ -11,7 +11,7 @@ from rich.logging import RichHandler
 
 from template import TemplateManager
 from proxmox import ProxmoxManager
-from utils import setup_logging, parse_template_list, get_installation_paths, validate_template_selection
+from utils import setup_logging, parse_template_list, get_installation_paths, validate_template_selection, self_update
 
 console = Console()
 
@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--update", action="store_true", help="Update existing templates")
     parser.add_argument("--rebuild", action="store_true", help="Rebuild templates from scratch")
     parser.add_argument("--status", action="store_true", help="Show template status without making changes")
+    parser.add_argument("--self-update", action="store_true", help="Update cloudbuilder from git repository")
 
     # Template selection arguments
     parser.add_argument("--only", help="Process only specified templates (comma-separated list)")
@@ -47,6 +48,11 @@ def main():
 
     # Log the main header rather than using console.print
     logger.info("Proxmox Template Builder")
+
+    # Handle self-update early and exit
+    if args.self_update:
+        success = self_update(paths['install_dir'], logger)
+        sys.exit(0 if success else 1)
 
     # Parse template selection
     process_all = True

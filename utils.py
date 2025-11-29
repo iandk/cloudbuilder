@@ -2,6 +2,7 @@
 #!/usr/bin/env python3
 
 import logging
+import subprocess
 from pathlib import Path
 from typing import List, Dict, Any
 import sys
@@ -119,3 +120,115 @@ def validate_template_selection(
             logger.error(f"Error: The following excluded templates do not exist: {', '.join(missing_templates)}")
             logger.info(f"Available templates: {', '.join(sorted(all_template_names))}")
             sys.exit(1)
+
+
+def self_update(install_dir: Path, logger: logging.Logger) -> bool:
+    """
+    Update cloudbuilder from git repository if installed from git.
+
+    Args:
+        install_dir: The installation directory of cloudbuilder
+        logger: Logger instance
+
+    Returns:
+        True if update was successful or not a git repo, False on error
+    """
+    git_dir = install_dir / ".git"
+
+    if not git_dir.exists():
+        logger.warning(f"Not a git repository: {install_dir}")
+        logger.info("Self-update is only available when cloudbuilder is installed from git")
+        return False
+
+    logger.info(f"Updating cloudbuilder from git repository in {install_dir}")
+
+    try:
+        # Get current branch
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        current_branch = result.stdout.strip()
+        logger.info(f"Current branch: {current_branch}")
+
+        # Get current commit before update
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        old_commit = result.stdout.strip()
+
+        # Fetch from remote
+        logger.info("Fetching updates from remote...")
+        subprocess.run(
+            ["git", "fetch"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        # Check if there are updates available
+        result = subprocess.run(
+            ["git", "rev-list", f"HEAD..origin/{current_branch}", "--count"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        updates_available = int(result.stdout.strip())
+
+        if updates_available == 0:
+            logger.info("Already up to date")
+            return True
+
+        logger.info(f"{updates_available} update(s) available, pulling changes...")
+
+        # Pull changes
+        result = subprocess.run(
+            ["git", "pull"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        # Get new commit
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        new_commit = result.stdout.strip()
+
+        logger.info(f"Successfully updated from {old_commit} to {new_commit}")
+
+        # Show recent commits
+        result = subprocess.run(
+            ["git", "log", f"{old_commit}..{new_commit}", "--oneline"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        if result.stdout.strip():
+            logger.info("Changes:")
+            for line in result.stdout.strip().split('\n'):
+                logger.info(f"  {line}")
+
+        return True
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Git command failed: {e.stderr if e.stderr else e}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to update: {e}")
+        return False
