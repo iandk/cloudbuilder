@@ -31,6 +31,9 @@ fi
 ln -sf "$INSTALL_DIR/cloudbuilder.py" /usr/local/bin/cloudbuilder
 chmod +x "$INSTALL_DIR/cloudbuilder.py"
 
+# Set up shell completions
+echo "Setting up shell completions..."
+cloudbuilder --setup-completions
 
 echo "Cloudbuilder installed successfully."
 echo "Configuration file: $INSTALL_DIR/templates.json"
