@@ -306,16 +306,20 @@ class TemplateManager:
                         f"Template {name} has incorrect VMID in metadata: {template.vmid} vs actual {actual_vmid}"
                     )
                     template.vmid = actual_vmid
-            # If template doesn't exist in Proxmox but has a VMID
+            # If template doesn't exist in Proxmox but has a VMID in metadata
             elif template.vmid is not None:
                 # Check if this VMID is used by a different template in Proxmox
                 if template.vmid in vmid_to_template:
                     other_template = vmid_to_template[template.vmid]
                     self.logger.warning(
-                        f"Template {name} claims VMID {template.vmid} but that VMID belongs to {other_template}"
+                        f"Template {name} claims VMID {template.vmid} but that VMID belongs to {other_template} - clearing stale VMID"
                     )
-                    # Clear the VMID since this template doesn't exist in Proxmox
-                    template.vmid = None
+                else:
+                    self.logger.warning(
+                        f"Template {name} has VMID {template.vmid} in metadata but doesn't exist in Proxmox - clearing stale VMID"
+                    )
+                # Always clear the VMID since this template doesn't exist in Proxmox
+                template.vmid = None
         
         # Save the synchronized metadata
         self.save_metadata()
