@@ -438,6 +438,7 @@ class ProxmoxManager:
             }
         else:
             template.build_date = current_time
+            template.last_update = None  # Clear stale last_update on fresh build
             metadata = {
                 "name": template.name,
                 "build_date": current_time

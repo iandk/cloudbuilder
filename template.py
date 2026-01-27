@@ -260,6 +260,7 @@ class TemplateManager:
                 template.last_update = current_time
             else:
                 template.build_date = current_time
+                template.last_update = None  # Clear stale last_update on fresh build
             
         except Exception as e:
             self.logger.error(f"Failed to customize image for {template.name}: {str(e)}")
