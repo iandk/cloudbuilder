@@ -294,6 +294,49 @@ class ProxmoxManager:
             self.logger.error(f"Failed to parse VM config for VMID {vmid}")
             return {}
 
+    def _cleanup_stale_cloudinit(self, vmid: int) -> bool:
+        """
+        Clean up a stale CloudInit volume for a given VMID.
+        Uses Proxmox's pvesm which handles any storage backend (ZFS, LVM, dir, etc.).
+        Returns True if cleanup was successful or volume didn't exist, False on failure.
+        """
+        volume_id = f"{self.storage}:vm-{vmid}-cloudinit"
+
+        # First check if the volume actually exists
+        try:
+            result = subprocess.run(
+                ["pvesm", "list", self.storage, "--vmid", str(vmid)],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # Check if our cloudinit volume is in the list
+            if f"vm-{vmid}-cloudinit" not in result.stdout:
+                self.logger.debug(f"No stale CloudInit volume found for VMID {vmid}")
+                return True
+        except subprocess.CalledProcessError:
+            # If we can't list, try to free anyway
+            pass
+
+        self.logger.debug(f"Attempting to free stale CloudInit volume: {volume_id}")
+
+        try:
+            subprocess.run(
+                ["pvesm", "free", volume_id],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            self.logger.info(f"Successfully freed stale CloudInit volume: {volume_id}")
+            return True
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else str(e)
+            if "does not exist" in str(error_msg).lower() or "no such" in str(error_msg).lower():
+                self.logger.debug(f"Volume {volume_id} does not exist (already cleaned)")
+                return True
+            self.logger.error(f"Failed to free stale CloudInit volume {volume_id}: {error_msg}")
+            return False
+
     def ensure_firewall_settings(self, vmid: int, name: str = "") -> bool:
         """
         Check and apply firewall settings (enable, ipfilter, macfilter) and NIC firewall if not already set.
@@ -514,7 +557,27 @@ class ProxmoxManager:
                         "--ide2", f"{self.storage}:cloudinit"
                     ], check=True, capture_output=True)
                 except subprocess.CalledProcessError as e:
-                    self.logger.warning(f"Failed to add CloudInit drive: {e.stderr}. This may be normal if the storage doesn't support CloudInit.")
+                    error_msg = e.stderr.decode() if hasattr(e.stderr, 'decode') else str(e.stderr)
+                    error_lower = error_msg.lower()
+                    # Detect stale volume across storage types (ZFS, LVM, dir, etc.)
+                    stale_indicators = ["already exists", "file exists", "volume exists", "lv already"]
+                    if any(indicator in error_lower for indicator in stale_indicators):
+                        self.logger.warning(f"Stale CloudInit volume detected for VMID {vmid}, cleaning up...")
+                        if self._cleanup_stale_cloudinit(vmid):
+                            # Retry adding CloudInit drive after cleanup
+                            try:
+                                subprocess.run([
+                                    "qm", "set", str(vmid),
+                                    "--ide2", f"{self.storage}:cloudinit"
+                                ], check=True, capture_output=True)
+                                self.logger.info(f"Successfully added CloudInit drive after cleanup")
+                            except subprocess.CalledProcessError as retry_error:
+                                retry_msg = retry_error.stderr.decode() if hasattr(retry_error.stderr, 'decode') else str(retry_error.stderr)
+                                self.logger.warning(f"Failed to add CloudInit drive after cleanup: {retry_msg}")
+                        else:
+                            self.logger.warning(f"Could not clean up stale CloudInit volume")
+                    else:
+                        self.logger.warning(f"Failed to add CloudInit drive: {error_msg}. This may be normal if the storage doesn't support CloudInit.")
 
                 # Enable firewall with IP filter and MAC filter
                 self.logger.debug(f"Enabling firewall with IP/MAC filtering for VM {vmid}")
