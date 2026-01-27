@@ -14,14 +14,11 @@ try:
 except ImportError:
     ARGCOMPLETE_AVAILABLE = False
 
-from rich.console import Console
 from rich.logging import RichHandler
 
 from template import TemplateManager
 from proxmox import ProxmoxManager
-from utils import setup_logging, parse_template_list, get_installation_paths, validate_template_selection, self_update, setup_shell_completions
-
-console = Console()
+from utils import console, setup_logging, parse_template_list, get_installation_paths, validate_template_selection, self_update, setup_shell_completions
 
 
 def main():

@@ -2,6 +2,7 @@
 #!/usr/bin/env python3
 
 import logging
+from logging.handlers import RotatingFileHandler
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Any
@@ -18,8 +19,12 @@ def setup_logging(log_dir: Path) -> logging.Logger:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "cloudbuilder.log"  # Single continuous log file
 
-    # Create file handler and set its level
-    file_handler = logging.FileHandler(log_file)
+    # Create rotating file handler (10MB max, keep 5 backups)
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5
+    )
     file_handler.setLevel(logging.DEBUG)
 
     # Create formatters
@@ -78,11 +83,12 @@ def get_installation_paths():
     for dir_path in [paths['template_dir'], paths['temp_dir'], paths['log_dir']]:
         dir_path.mkdir(parents=True, exist_ok=True)
 
-    # Debug output to help diagnose path issues
+    # Debug output to help diagnose path issues (only if logger is configured)
     logger = logging.getLogger("cloudbuilder")
-    logger.debug(f"Script path: {script_path}")
-    logger.debug(f"Install directory: {install_dir}")
-    logger.debug(f"Config file path: {paths['config_file']}")
+    if logger.handlers or logging.root.handlers:
+        logger.debug(f"Script path: {script_path}")
+        logger.debug(f"Install directory: {install_dir}")
+        logger.debug(f"Config file path: {paths['config_file']}")
 
     return paths
 
