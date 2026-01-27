@@ -207,6 +207,12 @@ class TemplateManager:
         for cmd in template.run_commands:
             commands.extend(["--run-command", cmd])
 
+        # Preserve SSH host keys across cloud-init instance-id changes (e.g., Proxmox config regeneration)
+        commands.extend([
+            "--run-command",
+            "mkdir -p /etc/cloud/cloud.cfg.d && echo 'ssh_deletekeys: false' > /etc/cloud/cloud.cfg.d/99-preserve-ssh-keys.cfg"
+        ])
+
         if template.ssh_password_auth:
             commands.extend([
                 "--run-command", 
