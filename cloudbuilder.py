@@ -3,6 +3,7 @@
 # cloudbuilder.py
 from rich.table import Table
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -36,6 +37,16 @@ def main():
     parser.add_argument("--status", action="store_true", help="Show template status without making changes")
     parser.add_argument("--self-update", action="store_true", help="Update cloudbuilder from git repository")
     parser.add_argument("--setup-completions", action="store_true", help="Set up shell autocompletions")
+    parser.add_argument("--import-manifest", dest="import_manifest", metavar="FILE",
+                        help="Import pre-built images from a manifest file (JSON with source paths/URLs)")
+    parser.add_argument("--generate-manifest", dest="generate_manifest", metavar="DIR",
+                        help="Generate a manifest JSON from a directory of qcow2/img files")
+    parser.add_argument("--base-url", dest="base_url", metavar="URL",
+                        help="Base URL to prefix sources in generated manifest (use with --generate-manifest)")
+    parser.add_argument("-o", "--output", dest="output_file", metavar="FILE",
+                        help="Output file for generated manifest (default: imports.json, use '-' for stdout)")
+    parser.add_argument("--force", action="store_true",
+                        help="Force import even if template already exists in Proxmox (removes and re-imports)")
 
     # Template selection arguments
     parser.add_argument("--only", help="Process only specified templates (comma-separated list)")
@@ -55,6 +66,57 @@ def main():
 
     args = parser.parse_args()
 
+    # Handle generate manifest early (before logging setup)
+    if args.generate_manifest:
+        source_dir = Path(args.generate_manifest)
+        if not source_dir.exists():
+            print(f"Error: Directory not found: {source_dir}", file=sys.stderr)
+            sys.exit(1)
+        if not source_dir.is_dir():
+            print(f"Error: Not a directory: {source_dir}", file=sys.stderr)
+            sys.exit(1)
+
+        # Find all qcow2 and img files
+        image_files = list(source_dir.glob("*.qcow2")) + list(source_dir.glob("*.img"))
+        if not image_files:
+            print(f"Error: No .qcow2 or .img files found in {source_dir}", file=sys.stderr)
+            sys.exit(1)
+
+        # Build manifest
+        manifest = {}
+        base_url = args.base_url.rstrip('/') if args.base_url else None
+
+        for image_path in sorted(image_files):
+            # Use filename without extension as template name
+            name = image_path.stem
+
+            if base_url:
+                source = f"{base_url}/{image_path.name}"
+            else:
+                source = str(image_path.absolute())
+
+            manifest[name] = {"source": source}
+
+        # Output JSON
+        json_output = json.dumps(manifest, indent=2)
+
+        # Default output file is imports.json in the source directory
+        if args.output_file:
+            output_file = args.output_file
+        else:
+            output_file = str(source_dir / "imports.json")
+
+        if output_file == "-":
+            # Output to stdout
+            print(json_output)
+        else:
+            # Write to file
+            with open(output_file, 'w') as f:
+                f.write(json_output + '\n')
+            print(f"Generated manifest with {len(manifest)} templates: {output_file}", file=sys.stderr)
+
+        sys.exit(0)
+
     # Setup logging
     logger = setup_logging(Path(args.log_dir))
 
@@ -70,6 +132,165 @@ def main():
     if args.setup_completions:
         success = setup_shell_completions(logger)
         sys.exit(0 if success else 1)
+
+    # Handle import manifest
+    if args.import_manifest:
+        manifest_source = args.import_manifest
+        is_url = manifest_source.startswith('http://') or manifest_source.startswith('https://')
+
+        if is_url:
+            # Fetch manifest from URL
+            import requests
+            try:
+                logger.info(f"Fetching manifest from {manifest_source}")
+                response = requests.get(manifest_source, timeout=30)
+                response.raise_for_status()
+                manifest = response.json()
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to fetch manifest from URL: {e}")
+                sys.exit(1)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in manifest: {e}")
+                sys.exit(1)
+        else:
+            # Load from local file
+            manifest_path = Path(manifest_source)
+            if not manifest_path.exists():
+                logger.error(f"Manifest file not found: {manifest_path}")
+                sys.exit(1)
+            try:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in manifest file: {e}")
+                sys.exit(1)
+
+        if not manifest:
+            logger.warning("Manifest file is empty")
+            sys.exit(0)
+
+        # Parse template filtering for imports
+        import_include = parse_template_list(args.only) if args.only else None
+        import_exclude = parse_template_list(args.exclude) if args.exclude else []
+
+        # Filter manifest entries
+        filtered_manifest = {}
+        for name, config in manifest.items():
+            if import_include is not None and name not in import_include:
+                continue
+            if name in import_exclude:
+                continue
+            filtered_manifest[name] = config
+
+        if not filtered_manifest:
+            logger.warning("No templates selected for import after filtering")
+            sys.exit(0)
+
+        logger.info(f"Importing {len(filtered_manifest)} template(s) from manifest")
+
+        # Initialize directories and managers
+        template_dir = Path(args.template_dir)
+        temp_dir = Path(args.temp_dir)
+        template_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        template_manager = TemplateManager(
+            config_path=args.config,
+            template_dir=template_dir,
+            temp_dir=temp_dir,
+            storage=args.storage
+        )
+
+        proxmox_manager = ProxmoxManager(
+            storage=args.storage,
+            min_vmid=args.min_vmid
+        )
+
+        # Load existing templates for customization support
+        try:
+            template_manager.load_templates()
+        except Exception:
+            pass  # Config might not exist, that's okay for imports
+
+        proxmox_templates = proxmox_manager.get_existing_templates()
+
+        # Process each import
+        success_count = 0
+        for name, config in filtered_manifest.items():
+            try:
+                source = config.get("source")
+                if not source:
+                    logger.error(f"Template '{name}' missing required 'source' field")
+                    continue
+
+                vmid = config.get("vmid")
+                customize = config.get("customize", False)
+
+                # Check if template already exists in Proxmox
+                existing_vmid = proxmox_templates.get(name)
+                if existing_vmid:
+                    if not args.force:
+                        logger.warning(f"Template '{name}' already exists in Proxmox (VMID: {existing_vmid}), skipping (use --force to overwrite)")
+                        continue
+
+                    # Force mode: check for linked clones before removing
+                    logger.info(f"Template '{name}' exists (VMID: {existing_vmid}), force mode enabled - will replace")
+                    if proxmox_manager.check_for_linked_clones(existing_vmid):
+                        logger.error(f"Cannot force import '{name}': template has linked clones. Remove linked VMs first.")
+                        continue
+
+                    # Create a temporary template object with the existing VMID for removal
+                    from template import Template
+                    existing_template = Template(
+                        name=name,
+                        image_url="",
+                        install_packages=[],
+                        update_packages=False,
+                        run_commands=[],
+                        ssh_password_auth=False,
+                        ssh_root_login=False,
+                        vmid=existing_vmid
+                    )
+                    logger.info(f"Removing existing template '{name}' (VMID: {existing_vmid})")
+                    proxmox_manager.remove_template(existing_template)
+
+                    # Reuse the existing VMID if not explicitly specified in manifest
+                    if vmid is None:
+                        vmid = existing_vmid
+                        logger.info(f"Reusing VMID {vmid} for '{name}'")
+
+                # Import the template from source
+                template = template_manager.import_from_source(name, source, vmid)
+
+                # Optionally customize if requested and config exists
+                if customize and name in template_manager.templates:
+                    config_template = template_manager.templates[name]
+                    if config_template.install_packages or config_template.run_commands:
+                        logger.info(f"Customizing imported template '{name}'")
+                        image_path = template_manager.get_template_path(template)
+                        template_manager.customize_image(config_template, image_path)
+                        # Update the template object with customization settings
+                        template.install_packages = config_template.install_packages
+                        template.run_commands = config_template.run_commands
+                        template_manager.save_metadata()
+
+                # Import to Proxmox
+                image_path = template_manager.get_template_path(template)
+                proxmox_manager.import_template(template, image_path, is_update=False)
+
+                # Update metadata with assigned VMID
+                template_manager.templates[name] = template
+                template_manager.save_metadata()
+
+                logger.info(f"Successfully imported template '{name}' (VMID: {template.vmid})")
+                success_count += 1
+
+            except Exception as e:
+                logger.error(f"Failed to import template '{name}': {e}", exc_info=True)
+                continue
+
+        logger.info(f"Import complete: {success_count}/{len(filtered_manifest)} templates imported successfully")
+        sys.exit(0 if success_count == len(filtered_manifest) else 1)
 
     # Parse template selection
     process_all = True

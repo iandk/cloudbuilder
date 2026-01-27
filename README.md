@@ -5,11 +5,14 @@ CloudBuilder is a tool for managing VM templates in Proxmox. It automates downlo
 ## Features
 
 - **Template Management**: Download, customize, and import VM templates
+- **Import Pre-built Images**: Import existing qcow2/img files from local paths or URLs
 - **Minimal Downtime**: Updates templates with minimal unavailability in Proxmox
 - **Template Filtering**: Process only specific templates with `--only` and `--except`
 - **Status Reporting**: Show template status without making changes
 - **Metadata Tracking**: Track build dates, update dates, and VMIDs
 - **Automatic Storage Detection**: Automatically selects compatible Proxmox storage
+- **Shell Completions**: Tab completion for bash and zsh
+- **Self-Update**: Update cloudbuilder directly from git
 
 ## Requirements
 
@@ -85,6 +88,12 @@ Create a `templates.json` file in the current directory:
 
 # Rebuild templates from scratch
 ./cloudbuilder.py --rebuild
+
+# Update cloudbuilder itself
+./cloudbuilder.py --self-update
+
+# Set up shell tab completions
+./cloudbuilder.py --setup-completions
 ```
 
 ### Template Selection
@@ -98,6 +107,70 @@ Create a `templates.json` file in the current directory:
 
 # Combine with other flags
 ./cloudbuilder.py --update --only debian-12
+```
+
+### Importing Pre-built Images
+
+Import templates from pre-built qcow2/img files without going through the customization process:
+
+```bash
+# Import templates from a local manifest file
+./cloudbuilder.py --import-manifest imports.json
+
+# Import templates from a remote manifest (URL)
+./cloudbuilder.py --import-manifest http://example.com/imports.json
+
+# Import only specific templates from manifest
+./cloudbuilder.py --import-manifest imports.json --only rocky-9,centos-stream
+
+# Force re-import templates that already exist (replaces them)
+./cloudbuilder.py --import-manifest imports.json --force
+```
+
+**Manifest file format (`imports.json`):**
+
+```json
+{
+  "rocky-9": {
+    "source": "/var/lib/cloudbuilder/templates/rocky-9.qcow2"
+  },
+  "centos-stream": {
+    "source": "https://cloud.centos.org/centos/9-stream/x86_64/images/latest.qcow2",
+    "vmid": 9050
+  },
+  "custom-debian": {
+    "source": "/path/to/custom-debian.qcow2",
+    "vmid": 9060,
+    "customize": true
+  }
+}
+```
+
+**Manifest fields:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `source` | Yes | Local file path or HTTP(S) URL to the qcow2/img file |
+| `vmid` | No | Specific VMID to assign (auto-assigns if omitted) |
+| `customize` | No | Run virt-customize using config from templates.json (default: false) |
+
+**Generating a manifest from a directory:**
+
+```bash
+# Generate manifest with local paths (writes to imports.json by default)
+./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/
+
+# Generate manifest with URL base (for remote imports)
+./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ --base-url http://myserver:8080
+
+# Specify output file
+./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ -o my-manifest.json
+
+# Output to stdout (for piping)
+./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ -o -
+
+# Then import on another host
+./cloudbuilder.py --import-manifest http://myserver:8080/imports.json
 ```
 
 ### Advanced Options
@@ -120,6 +193,13 @@ Create a `templates.json` file in the current directory:
 | `--status` | Show template status without making changes |
 | `--update` | Update existing templates |
 | `--rebuild` | Rebuild templates from scratch |
+| `--self-update` | Update cloudbuilder from git repository |
+| `--setup-completions` | Set up shell autocompletions (bash/zsh) |
+| `--import-manifest FILE/URL` | Import pre-built images from a manifest file or URL (JSON) |
+| `--generate-manifest DIR` | Generate manifest JSON from a directory of qcow2/img files |
+| `--base-url URL` | Base URL to prefix sources in generated manifest |
+| `-o, --output FILE` | Output file for generated manifest (default: imports.json, use '-' for stdout) |
+| `--force` | Force import even if template exists in Proxmox (removes and re-imports) |
 | `--only LIST` | Process only specific templates (comma-separated) |
 | `--except LIST` | Process all templates except specified ones (comma-separated) |
 | `--config PATH` | Path to templates configuration file (default: templates.json) |

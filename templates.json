@@ -74,24 +74,6 @@
         "ssh_password_auth": false,
         "ssh_root_login": false
     },
-    "ubuntu-22-04": {
-        "image_url": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
-        "install_packages": [
-            "qemu-guest-agent",
-            "resolvconf",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "systemctl enable qemu-guest-agent",
-            "systemctl start qemu-guest-agent",
-            "rm -f /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
     "ubuntu-24-04": {
         "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
         "install_packages": [

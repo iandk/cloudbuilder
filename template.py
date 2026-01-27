@@ -282,6 +282,85 @@ class TemplateManager:
         
         return template_path
 
+    def import_from_source(self, name: str, source: str, vmid: Optional[int] = None) -> 'Template':
+        """
+        Import a pre-built image from a local path or URL without customization.
+
+        Args:
+            name: Name for the template
+            source: Local file path or HTTP(S) URL to the qcow2/img file
+            vmid: Optional specific VMID to assign
+
+        Returns:
+            Template object with metadata populated
+        """
+        self.logger.info(f"Importing template '{name}' from {source}")
+
+        template_path = self.template_dir / f"{name}.qcow2"
+        is_url = source.startswith('http://') or source.startswith('https://')
+
+        if is_url:
+            # Download from URL
+            self.logger.info(f"Downloading image for {name} from URL")
+            try:
+                head_response = requests.head(source, timeout=30, allow_redirects=True)
+                head_response.raise_for_status()
+
+                response = requests.get(source, stream=True, timeout=30)
+                response.raise_for_status()
+
+                with console.status(f"Downloading {name}", spinner="dots") as status:
+                    start_time = time.time()
+                    downloaded = 0
+
+                    with open(template_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if time.time() - start_time > DOWNLOAD_TIMEOUT:
+                                raise TimeoutError(f"Download timeout after {DOWNLOAD_TIMEOUT} seconds")
+                            f.write(chunk)
+                            downloaded += len(chunk)
+
+                self.logger.info(f"Downloaded {downloaded} bytes for {name}")
+
+            except requests.exceptions.RequestException as e:
+                self.logger.error(f"Failed to download image for {name} from {source}: {e}")
+                if template_path.exists():
+                    template_path.unlink()
+                raise
+        else:
+            # Copy from local path
+            source_path = Path(source)
+            if not source_path.exists():
+                raise FileNotFoundError(f"Source file not found: {source}")
+
+            if not source_path.is_file():
+                raise ValueError(f"Source is not a file: {source}")
+
+            self.logger.info(f"Copying local image for {name}")
+            with console.status(f"Copying {name}", spinner="dots"):
+                shutil.copy2(source_path, template_path)
+
+        # Create template object with metadata
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        template = Template(
+            name=name,
+            image_url=source,  # Store original source for reference
+            install_packages=[],
+            update_packages=False,
+            run_commands=[],
+            ssh_password_auth=False,
+            ssh_root_login=False,
+            build_date=current_time,
+            vmid=vmid
+        )
+
+        # Add to templates dict and save metadata
+        self.templates[name] = template
+        self.save_metadata()
+
+        self.logger.info(f"Successfully imported template '{name}'")
+        return template
+
     def sync_metadata_with_proxmox(self, proxmox_templates: Dict[str, int]) -> None:
         """
         Synchronize template metadata with actual Proxmox state.
