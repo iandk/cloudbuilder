@@ -93,11 +93,29 @@ class ProxmoxManager:
                     if is_active and is_enabled and is_compatible:
                         vm_compatible_storages.append(storage["storage"])
 
-                # If no storage was specified, automatically select the first compatible one
+                # If no storage was specified, automatically select the best compatible one
+                # Prioritize local storage over network storage
                 if self.storage is None:
                     if vm_compatible_storages:
-                        self.storage = vm_compatible_storages[0]
-                        self.logger.info(f"Automatically selected storage: '{self.storage}'")
+                        # Build a list of (storage_name, is_local) tuples
+                        storage_with_locality = []
+                        for storage in storages:
+                            if storage["storage"] in vm_compatible_storages:
+                                storage_type = storage.get("type", "")
+                                # Local storage types: dir, lvm, lvmthin, zfspool, btrfs
+                                # Network storage types: nfs, cifs, glusterfs, iscsi, iscsidirect, rbd, cephfs, pbs
+                                local_types = {"dir", "lvm", "lvmthin", "zfspool", "btrfs"}
+                                is_local = storage_type in local_types
+                                storage_with_locality.append((storage["storage"], is_local, storage_type))
+
+                        # Sort: local storage first, then by name for consistency
+                        storage_with_locality.sort(key=lambda x: (not x[1], x[0]))
+
+                        self.storage = storage_with_locality[0][0]
+                        selected_type = storage_with_locality[0][2]
+                        is_local = storage_with_locality[0][1]
+                        locality_str = "local" if is_local else "network"
+                        self.logger.info(f"Automatically selected storage: '{self.storage}' (type: {selected_type}, {locality_str})")
                     else:
                         self.logger.error("No active, enabled, and VM-compatible storage found in Proxmox.")
                         raise ValueError("No active and compatible storage found. Please configure a storage that supports VM images.")

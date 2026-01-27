@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
 # cloudbuilder.py
 from rich.table import Table
 import argparse
@@ -6,12 +7,18 @@ import logging
 import sys
 from pathlib import Path
 
+try:
+    import argcomplete
+    ARGCOMPLETE_AVAILABLE = True
+except ImportError:
+    ARGCOMPLETE_AVAILABLE = False
+
 from rich.console import Console
 from rich.logging import RichHandler
 
 from template import TemplateManager
 from proxmox import ProxmoxManager
-from utils import setup_logging, parse_template_list, get_installation_paths, validate_template_selection, self_update
+from utils import setup_logging, parse_template_list, get_installation_paths, validate_template_selection, self_update, setup_shell_completions
 
 console = Console()
 
@@ -28,6 +35,7 @@ def main():
     parser.add_argument("--rebuild", action="store_true", help="Rebuild templates from scratch")
     parser.add_argument("--status", action="store_true", help="Show template status without making changes")
     parser.add_argument("--self-update", action="store_true", help="Update cloudbuilder from git repository")
+    parser.add_argument("--setup-completions", action="store_true", help="Set up shell autocompletions")
 
     # Template selection arguments
     parser.add_argument("--only", help="Process only specified templates (comma-separated list)")
@@ -41,6 +49,10 @@ def main():
     parser.add_argument("--log-dir", default=str(paths['log_dir']), help="Directory for log files")
     parser.add_argument("--min-vmid", type=int, default=9000, help="Minimum VMID for templates")
 
+    # Enable shell autocompletion if argcomplete is available
+    if ARGCOMPLETE_AVAILABLE:
+        argcomplete.autocomplete(parser)
+
     args = parser.parse_args()
 
     # Setup logging
@@ -52,6 +64,11 @@ def main():
     # Handle self-update early and exit
     if args.self_update:
         success = self_update(paths['install_dir'], logger)
+        sys.exit(0 if success else 1)
+
+    # Handle shell completions setup and exit
+    if args.setup_completions:
+        success = setup_shell_completions(logger)
         sys.exit(0 if success else 1)
 
     # Parse template selection
