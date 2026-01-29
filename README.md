@@ -51,12 +51,17 @@ Create a `templates.json` file in the current directory:
             "curl",
             "git"
         ],
-        "update_packages": true,
+        "update_packages": false,
         "run_commands": [
-            "systemctl enable qemu-guest-agent"
+            "apt-get update && apt-get -y dist-upgrade",
+            "systemctl enable qemu-guest-agent",
+            "rm -f /etc/ssh/ssh_host_*",
+            "systemctl enable ssh",
+            "rm -rf /var/lib/cloud/instance /var/lib/cloud/data",
+            "truncate -s 0 /etc/machine-id"
         ],
-        "ssh_password_auth": true,
-        "ssh_root_login": true
+        "ssh_password_auth": false,
+        "ssh_root_login": false
     }
 }
 ```
@@ -67,10 +72,14 @@ Create a `templates.json` file in the current directory:
 |--------|-------------|
 | `image_url` | URL to download the cloud image |
 | `install_packages` | List of packages to install |
-| `update_packages` | Whether to update all packages |
+| `update_packages` | Whether to update packages via virt-customize (recommend `false`, do manual upgrade in run_commands instead) |
 | `run_commands` | Custom commands to run during customization |
 | `ssh_password_auth` | Enable password authentication for SSH |
 | `ssh_root_login` | Allow root login via SSH |
+
+**Note**: For reliable builds, set `update_packages: false` and add the upgrade command as the first entry in `run_commands`:
+- Debian/Ubuntu: `apt-get update && apt-get -y dist-upgrade`
+- RHEL/Fedora: `sudo dnf -y upgrade`
 
 ## Usage
 
@@ -132,14 +141,14 @@ Import templates from pre-built qcow2/img files without going through the custom
 ```json
 {
   "rocky-9": {
-    "source": "/var/lib/cloudbuilder/templates/rocky-9.qcow2"
+    "source": "rocky-9.qcow2"
   },
   "centos-stream": {
-    "source": "https://cloud.centos.org/centos/9-stream/x86_64/images/latest.qcow2",
+    "source": "centos-stream.qcow2",
     "vmid": 9050
   },
   "custom-debian": {
-    "source": "/path/to/custom-debian.qcow2",
+    "source": "custom-debian.qcow2",
     "vmid": 9060,
     "customize": true
   }
@@ -150,18 +159,15 @@ Import templates from pre-built qcow2/img files without going through the custom
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `source` | Yes | Local file path or HTTP(S) URL to the qcow2/img file |
+| `source` | Yes | Filename, relative path, or full URL to the qcow2/img file. Relative sources are resolved against the manifest URL when importing from HTTP. |
 | `vmid` | No | Specific VMID to assign (auto-assigns if omitted) |
 | `customize` | No | Run virt-customize using config from templates.json (default: false) |
 
 **Generating a manifest from a directory:**
 
 ```bash
-# Generate manifest with local paths (writes to imports.json by default)
+# Generate manifest (writes to imports.json by default)
 ./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/
-
-# Generate manifest with URL base (for remote imports)
-./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ --base-url http://myserver:8080
 
 # Specify output file
 ./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ -o my-manifest.json
@@ -169,7 +175,10 @@ Import templates from pre-built qcow2/img files without going through the custom
 # Output to stdout (for piping)
 ./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ -o -
 
-# Then import on another host
+# Serve the directory with a simple HTTP server
+cd /var/lib/cloudbuilder/templates && python3 -m http.server 8080
+
+# Then import on another host - sources are resolved relative to manifest URL
 ./cloudbuilder.py --import-manifest http://myserver:8080/imports.json
 ```
 
@@ -197,7 +206,7 @@ Import templates from pre-built qcow2/img files without going through the custom
 | `--setup-completions` | Set up shell autocompletions (bash/zsh) |
 | `--import-manifest FILE/URL` | Import pre-built images from a manifest file or URL (JSON) |
 | `--generate-manifest DIR` | Generate manifest JSON from a directory of qcow2/img files |
-| `--base-url URL` | Base URL to prefix sources in generated manifest |
+| `--base-url URL` | Optional: prefix sources with full URL in generated manifest (by default, outputs just filenames which are resolved relative to manifest URL on import) |
 | `-o, --output FILE` | Output file for generated manifest (default: imports.json, use '-' for stdout) |
 | `--force` | Force import even if template exists in Proxmox (removes and re-imports) |
 | `--only LIST` | Process only specific templates (comma-separated) |
@@ -251,6 +260,16 @@ Example metadata.json:
 - **Update mode**: Updates existing templates while maintaining VMIDs
 - **Rebuild mode**: Rebuilds templates from scratch while preserving VMIDs
 - **Minimal downtime**: Templates are built locally first, then replaced in Proxmox one by one
+
+## Template Preparation
+
+Templates are prepared for cloning with these critical steps (handled in `run_commands`):
+
+1. **SSH Host Keys**: Deleted during build, regenerated on first VM boot
+2. **Machine ID**: Truncated (not deleted) so each VM gets a unique ID
+3. **Cloud-init State**: Cleared so cloud-init runs fresh on new VMs
+
+See `CLAUDE.md` for detailed implementation notes.
 
 ## Logging
 

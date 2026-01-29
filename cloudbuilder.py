@@ -88,9 +88,11 @@ def main():
             name = image_path.stem
 
             if base_url:
+                # Explicit base URL provided - use full URL
                 source = f"{base_url}/{image_path.name}"
             else:
-                source = str(image_path.absolute())
+                # Default: just filename (resolved relative to manifest URL on import)
+                source = image_path.name
 
             manifest[name] = {"source": source}
 
@@ -134,15 +136,19 @@ def main():
     if args.import_manifest:
         manifest_source = args.import_manifest
         is_url = manifest_source.startswith('http://') or manifest_source.startswith('https://')
+        manifest_base_url = None  # Base URL for resolving relative sources
 
         if is_url:
             # Fetch manifest from URL
             import requests
+            from urllib.parse import urljoin
             try:
                 logger.info(f"Fetching manifest from {manifest_source}")
                 response = requests.get(manifest_source, timeout=30)
                 response.raise_for_status()
                 manifest = response.json()
+                # Extract base URL for resolving relative sources
+                manifest_base_url = manifest_source.rsplit('/', 1)[0] + '/'
             except requests.exceptions.RequestException as e:
                 logger.error(f"Failed to fetch manifest from URL: {e}")
                 sys.exit(1)
@@ -219,6 +225,10 @@ def main():
                 if not source:
                     logger.error(f"Template '{name}' missing required 'source' field")
                     continue
+
+                # Resolve relative sources against manifest base URL
+                if manifest_base_url and not source.startswith(('http://', 'https://', '/')):
+                    source = manifest_base_url + source
 
                 vmid = config.get("vmid")
                 customize = config.get("customize", False)
@@ -402,6 +412,7 @@ def main():
 
         # First, build all templates locally
         built_templates = {}
+        up_to_date_count = 0
 
         for name, template in filtered_templates.items():
             try:
@@ -430,17 +441,15 @@ def main():
                         logger.info(f"Template {name} missing locally, building it")
                         image_path = template_manager.build_template(template)
                         built_templates[name] = (template, image_path, exists_in_proxmox)
-                    else:
-                        logger.info(f"Template {name} exists locally")
+                    elif not exists_in_proxmox:
+                        logger.info(f"Template {name} missing in Proxmox, importing it")
                         image_path = template_manager.get_template_path(template)
-
-                        if not exists_in_proxmox:
-                            logger.info(f"Template {name} exists locally but missing in Proxmox")
-                            built_templates[name] = (template, image_path, False)
-                        else:
-                            logger.info(f"Template {name} exists in Proxmox (VMID: {template.vmid})")
-                            # Ensure firewall settings are correct for existing templates
-                            proxmox_manager.ensure_firewall_settings(template.vmid, name)
+                        built_templates[name] = (template, image_path, False)
+                    else:
+                        # Template exists both locally and in Proxmox - nothing to do
+                        up_to_date_count += 1
+                        # Ensure firewall settings are correct for existing templates
+                        proxmox_manager.ensure_firewall_settings(template.vmid, name)
 
                 template_manager.save_metadata()
 
@@ -477,7 +486,11 @@ def main():
                 logger.error(f"Failed to import template {name} to Proxmox: {e}", exc_info=True)
                 continue
 
-        logger.info("Template processing completed")
+        # Print summary
+        if built_templates:
+            logger.info(f"Processed {len(built_templates)} template(s)")
+        elif up_to_date_count > 0:
+            logger.info(f"All {up_to_date_count} template(s) up to date. Use --update to refresh or --rebuild to recreate.")
 
     except Exception as e:
         logger.error(f"An error occurred: {e}", exc_info=True)

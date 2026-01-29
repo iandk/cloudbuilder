@@ -35,7 +35,7 @@ def setup_logging(log_dir: Path) -> logging.Logger:
     # Using a more minimal format without timestamps to avoid clutter
     rich_handler = RichHandler(
         console=console,
-        rich_tracebacks=True,
+        rich_tracebacks=False,  # Tracebacks go to log file only, not console
         show_time=False,
         level=logging.INFO,
         markup=True,  # Enable rich markup in log messages
