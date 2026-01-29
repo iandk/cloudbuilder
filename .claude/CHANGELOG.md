@@ -6,6 +6,32 @@
 
 ## 2025-01-29
 
+### Standalone Mode Support
+
+**Added support for running cloudbuilder on non-Proxmox systems**
+- CloudBuilder now automatically detects if Proxmox VE is available
+- When Proxmox is not detected, runs in standalone mode (builds images locally only)
+- New `--build-only` flag to explicitly skip Proxmox import even on Proxmox systems
+- Status table adapts to show only relevant columns in standalone mode (no Proxmox/VMID columns)
+- All build operations (download, customize) work without Proxmox dependencies
+- Files affected: `cloudbuilder.py`, `utils.py`
+
+**New utility function:**
+- Added `is_proxmox_available()` in `utils.py` - checks for `pvesh` command availability
+
+**Example usage:**
+```bash
+# On a standalone system (auto-detected)
+cloudbuilder --status
+# WARNING  Proxmox VE not detected - running in standalone mode
+
+# Explicitly build locally on a Proxmox system
+cloudbuilder --build-only --only debian-12
+# INFO     Standalone mode enabled - skipping Proxmox import
+```
+
+---
+
 ### Self-Update Local Changes Handling
 
 **Enhanced `--self-update` to handle local modifications gracefully**

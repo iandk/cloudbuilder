@@ -14,6 +14,25 @@ from rich.logging import RichHandler
 console = Console()
 
 
+def is_proxmox_available() -> bool:
+    """
+    Check if Proxmox VE tools are available on this system.
+
+    Returns:
+        True if running on a Proxmox VE system with pvesh available, False otherwise.
+    """
+    try:
+        result = subprocess.run(
+            ["pvesh", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
 def setup_logging(log_dir: Path) -> logging.Logger:
     """Setup logging to both file and console with a single continuous log file."""
     log_dir.mkdir(parents=True, exist_ok=True)

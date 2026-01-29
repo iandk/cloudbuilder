@@ -18,7 +18,7 @@ from rich.logging import RichHandler
 
 from template import TemplateManager
 from proxmox import ProxmoxManager
-from utils import console, setup_logging, parse_template_list, get_installation_paths, validate_template_selection, self_update, setup_shell_completions
+from utils import console, setup_logging, parse_template_list, get_installation_paths, validate_template_selection, self_update, setup_shell_completions, is_proxmox_available
 
 
 def main():
@@ -32,6 +32,8 @@ def main():
     parser.add_argument("--update", action="store_true", help="Update existing templates")
     parser.add_argument("--rebuild", action="store_true", help="Rebuild templates from scratch")
     parser.add_argument("--status", action="store_true", help="Show template status without making changes")
+    parser.add_argument("--build-only", action="store_true", dest="build_only",
+                        help="Build templates locally without importing to Proxmox (standalone mode)")
     parser.add_argument("--self-update", action="store_true", help="Update cloudbuilder from git repository")
     parser.add_argument("--setup-completions", action="store_true", help="Set up shell autocompletions")
     parser.add_argument("--import-manifest", dest="import_manifest", metavar="FILE",
@@ -192,6 +194,16 @@ def main():
 
         logger.info(f"Importing {len(filtered_manifest)} template(s) from manifest")
 
+        # Check Proxmox availability for import operations
+        proxmox_available = is_proxmox_available()
+        standalone_mode = args.build_only or not proxmox_available
+
+        if standalone_mode:
+            if not proxmox_available:
+                logger.warning("Proxmox VE not detected - running in standalone mode")
+            else:
+                logger.info("Standalone mode enabled - skipping Proxmox import")
+
         # Initialize directories and managers
         template_dir = Path(args.template_dir)
         temp_dir = Path(args.temp_dir)
@@ -205,18 +217,20 @@ def main():
             storage=args.storage
         )
 
-        proxmox_manager = ProxmoxManager(
-            storage=args.storage,
-            min_vmid=args.min_vmid
-        )
+        proxmox_manager = None
+        proxmox_templates = {}
+        if not standalone_mode:
+            proxmox_manager = ProxmoxManager(
+                storage=args.storage,
+                min_vmid=args.min_vmid
+            )
+            proxmox_templates = proxmox_manager.get_existing_templates()
 
         # Load existing templates for customization support
         try:
             template_manager.load_templates()
         except Exception:
             pass  # Config might not exist, that's okay for imports
-
-        proxmox_templates = proxmox_manager.get_existing_templates()
 
         # Process each import
         success_count = 0
@@ -235,8 +249,8 @@ def main():
                 vmid = config.get("vmid")
                 customize = config.get("customize", False)
 
-                # Check if template already exists in Proxmox
-                existing_vmid = proxmox_templates.get(name)
+                # Check if template already exists in Proxmox (only if not in standalone mode)
+                existing_vmid = proxmox_templates.get(name) if not standalone_mode else None
                 if existing_vmid:
                     if not args.force:
                         skipped_count += 1
@@ -283,15 +297,17 @@ def main():
                         template.run_commands = config_template.run_commands
                         template_manager.save_metadata()
 
-                # Import to Proxmox
-                image_path = template_manager.get_template_path(template)
-                proxmox_manager.import_template(template, image_path, is_update=False)
+                # Import to Proxmox (unless in standalone mode)
+                if not standalone_mode and proxmox_manager:
+                    image_path = template_manager.get_template_path(template)
+                    proxmox_manager.import_template(template, image_path, is_update=False)
+                    logger.info(f"Successfully imported template '{name}' (VMID: {template.vmid})")
+                else:
+                    logger.info(f"Successfully downloaded template '{name}' to {template_manager.get_template_path(template)}")
 
                 # Update metadata with assigned VMID
                 template_manager.templates[name] = template
                 template_manager.save_metadata()
-
-                logger.info(f"Successfully imported template '{name}' (VMID: {template.vmid})")
                 success_count += 1
 
             except Exception as e:
@@ -326,6 +342,16 @@ def main():
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Check Proxmox availability
+        proxmox_available = is_proxmox_available()
+        standalone_mode = args.build_only or not proxmox_available
+
+        if standalone_mode:
+            if not proxmox_available:
+                logger.warning("Proxmox VE not detected - running in standalone mode")
+            else:
+                logger.info("Standalone mode enabled - skipping Proxmox import")
+
         # Initialize managers
         template_manager = TemplateManager(
             config_path=args.config,
@@ -334,14 +360,17 @@ def main():
             storage=args.storage
         )
 
-        proxmox_manager = ProxmoxManager(
-            storage=args.storage,
-            min_vmid=args.min_vmid
-        )
+        proxmox_manager = None
+        proxmox_templates = {}
+        if not standalone_mode:
+            proxmox_manager = ProxmoxManager(
+                storage=args.storage,
+                min_vmid=args.min_vmid
+            )
+            proxmox_templates = proxmox_manager.get_existing_templates()
 
         # Load templates and get Proxmox status
         template_manager.load_templates()
-        proxmox_templates = proxmox_manager.get_existing_templates()
 
         # Validate template selection first
         if args.only or args.exclude:
@@ -353,8 +382,9 @@ def main():
                 exclude_templates=exclude_templates if args.exclude else None
             )
 
-        # Synchronize metadata with Proxmox state
-        template_manager.sync_metadata_with_proxmox(proxmox_templates)
+        # Synchronize metadata with Proxmox state (only if Proxmox is available)
+        if not standalone_mode:
+            template_manager.sync_metadata_with_proxmox(proxmox_templates)
 
         # Then apply template filtering
         filtered_templates = {}
@@ -370,7 +400,7 @@ def main():
             logger.warning("No templates selected for processing!")
             return
 
-        if not args.status:  # Don't do this check if only showing status
+        if not args.status and not standalone_mode and proxmox_manager:  # Don't do this check if only showing status or in standalone mode
             templates_with_clones = []
             for name, template in filtered_templates.items():
                 is_candidate_for_update_rebuild = (args.update or args.rebuild) and name in proxmox_templates
@@ -390,27 +420,31 @@ def main():
 
         # Status only mode
         if args.status:
-            logger.info("Template Status")
+            if standalone_mode:
+                logger.info("Template Status (Standalone Mode)")
+            else:
+                logger.info("Template Status")
 
             status_table = Table(show_header=True, header_style="bold", box=None)
             status_table.add_column("Template", style="cyan")
             status_table.add_column("Local")
-            status_table.add_column("Proxmox")
-            status_table.add_column("VMID")
+            if not standalone_mode:
+                status_table.add_column("Proxmox")
+                status_table.add_column("VMID")
             status_table.add_column("Build Date")
             status_table.add_column("Last Update")
 
             for name, template in filtered_templates.items():
                 local_status = "[green]✓[/green]" if template_manager.template_exists_locally(template) else "[red]✗[/red]"
-                proxmox_status = "[green]✓[/green]" if name in proxmox_templates else "[red]✗[/red]"
-                vmid = str(template.vmid) if template.vmid else "—"
                 build_date = template.build_date if template.build_date else "—"
                 last_update = template.last_update if template.last_update else "—"
 
-                status_table.add_row(
-                    name, local_status, proxmox_status, vmid,
-                    build_date, last_update
-                )
+                if standalone_mode:
+                    status_table.add_row(name, local_status, build_date, last_update)
+                else:
+                    proxmox_status = "[green]✓[/green]" if name in proxmox_templates else "[red]✗[/red]"
+                    vmid = str(template.vmid) if template.vmid else "—"
+                    status_table.add_row(name, local_status, proxmox_status, vmid, build_date, last_update)
 
             # Print table with console to keep formatting
             console.print(status_table)
@@ -447,15 +481,16 @@ def main():
                         logger.info(f"Template {name} missing locally, building it")
                         image_path = template_manager.build_template(template)
                         built_templates[name] = (template, image_path, exists_in_proxmox)
-                    elif not exists_in_proxmox:
+                    elif not standalone_mode and not exists_in_proxmox:
                         logger.info(f"Template {name} missing in Proxmox, importing it")
                         image_path = template_manager.get_template_path(template)
                         built_templates[name] = (template, image_path, False)
                     else:
-                        # Template exists both locally and in Proxmox - nothing to do
+                        # Template exists both locally (and in Proxmox if not standalone) - nothing to do
                         up_to_date_count += 1
-                        # Ensure firewall settings are correct for existing templates
-                        proxmox_manager.ensure_firewall_settings(template.vmid, name)
+                        # Ensure firewall settings are correct for existing templates (Proxmox only)
+                        if not standalone_mode and proxmox_manager and template.vmid:
+                            proxmox_manager.ensure_firewall_settings(template.vmid, name)
 
                 template_manager.save_metadata()
 
@@ -463,34 +498,40 @@ def main():
                 logger.error(f"Failed to build template {name}: {e}", exc_info=True)
                 continue
 
-        # Then, import/update templates in Proxmox one by one
-        for name, (template, image_path, exists_in_proxmox) in built_templates.items():
-            try:
-                # If a template is being imported and already exists in Proxmox, it's an overwrite.
-                is_overwrite_operation = exists_in_proxmox
+        # Then, import/update templates in Proxmox one by one (skip in standalone mode)
+        if standalone_mode:
+            if built_templates:
+                logger.info(f"Standalone mode: {len(built_templates)} template(s) built locally")
+                for name, (template, image_path, _) in built_templates.items():
+                    logger.info(f"  - {name}: {image_path}")
+        else:
+            for name, (template, image_path, exists_in_proxmox) in built_templates.items():
+                try:
+                    # If a template is being imported and already exists in Proxmox, it's an overwrite.
+                    is_overwrite_operation = exists_in_proxmox
 
-                if is_overwrite_operation:
-                    logger.info(f"Preparing to overwrite existing template {name} (VMID: {template.vmid}) in Proxmox.")
-                    # Upfront check should have caught linked clones. Now safe to remove.
-                    logger.info(f"Removing existing template {name} (VMID: {template.vmid}) from Proxmox before import.")
-                    proxmox_manager.remove_template(template)
+                    if is_overwrite_operation:
+                        logger.info(f"Preparing to overwrite existing template {name} (VMID: {template.vmid}) in Proxmox.")
+                        # Upfront check should have caught linked clones. Now safe to remove.
+                        logger.info(f"Removing existing template {name} (VMID: {template.vmid}) from Proxmox before import.")
+                        proxmox_manager.remove_template(template)
 
-                # The is_update flag for import_template now primarily informs metadata handling within add_template_metadata
-                # True if args.update was passed, False otherwise (e.g. for rebuilds or new installs)
-                metadata_update_flag = args.update
+                    # The is_update flag for import_template now primarily informs metadata handling within add_template_metadata
+                    # True if args.update was passed, False otherwise (e.g. for rebuilds or new installs)
+                    metadata_update_flag = args.update
 
-                logger.info(f"Importing template {name} to Proxmox (Metadata Update: {metadata_update_flag})")
-                proxmox_manager.import_template(template, image_path, is_update=metadata_update_flag)
+                    logger.info(f"Importing template {name} to Proxmox (Metadata Update: {metadata_update_flag})")
+                    proxmox_manager.import_template(template, image_path, is_update=metadata_update_flag)
 
-                # Make sure the template in the template_manager is updated with the VMID
-                template_manager.templates[name].vmid = template.vmid
-                template_manager.save_metadata()
+                    # Make sure the template in the template_manager is updated with the VMID
+                    template_manager.templates[name].vmid = template.vmid
+                    template_manager.save_metadata()
 
-                logger.info(f"Successfully processed template: {name}")
+                    logger.info(f"Successfully processed template: {name}")
 
-            except Exception as e:
-                logger.error(f"Failed to import template {name} to Proxmox: {e}", exc_info=True)
-                continue
+                except Exception as e:
+                    logger.error(f"Failed to import template {name} to Proxmox: {e}", exc_info=True)
+                    continue
 
         # Print summary
         if built_templates:

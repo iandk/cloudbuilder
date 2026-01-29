@@ -5,6 +5,7 @@ CloudBuilder is a tool for managing VM templates in Proxmox. It automates downlo
 ## Features
 
 - **Template Management**: Download, customize, and import VM templates
+- **Standalone Mode**: Build templates locally without Proxmox (auto-detected or via `--build-only`)
 - **Import Pre-built Images**: Import existing qcow2/img files from local paths or URLs
 - **Minimal Downtime**: Updates templates with minimal unavailability in Proxmox
 - **Template Filtering**: Process only specific templates with `--only` and `--except`
@@ -17,9 +18,13 @@ CloudBuilder is a tool for managing VM templates in Proxmox. It automates downlo
 ## Requirements
 
 - Python 3.6+
-- Proxmox VE 6.0+
 - libguestfs-tools (for virt-customize)
+
+**For Proxmox integration (optional):**
+- Proxmox VE 6.0+
 - Proxmox CLI tools (qm, pvesh)
+
+Without Proxmox, cloudbuilder runs in standalone mode and builds templates locally.
 
 ## Installation
 
@@ -107,6 +112,30 @@ Create a `templates.json` file in the current directory:
 # Set up shell tab completions
 ./cloudbuilder.py --setup-completions
 ```
+
+### Standalone Mode
+
+CloudBuilder can run on systems without Proxmox VE installed. It automatically detects the environment and adjusts behavior accordingly.
+
+```bash
+# On a non-Proxmox system, standalone mode is automatic
+./cloudbuilder.py --status
+# WARNING  Proxmox VE not detected - running in standalone mode
+
+# Build templates locally (downloads and customizes images)
+./cloudbuilder.py --rebuild --only debian-12
+# Images are saved to /var/lib/cloudbuilder/templates/
+
+# On a Proxmox system, explicitly skip import
+./cloudbuilder.py --build-only --only debian-12
+# INFO     Standalone mode enabled - skipping Proxmox import
+```
+
+In standalone mode:
+- Templates are downloaded and customized locally
+- Images are saved to the template directory as qcow2 files
+- No Proxmox CLI tools (pvesh, qm) are required
+- Status table shows only local columns (no Proxmox/VMID)
 
 ### Template Selection
 
@@ -208,6 +237,7 @@ cd /var/lib/cloudbuilder/templates && python3 -m http.server 8080
 | `--status` | Show template status without making changes |
 | `--update` | Update existing templates |
 | `--rebuild` | Rebuild templates from scratch |
+| `--build-only` | Build templates locally without importing to Proxmox (standalone mode) |
 | `--self-update` | Update cloudbuilder from git repository |
 | `--setup-completions` | Set up shell autocompletions (bash/zsh) |
 | `--import-manifest FILE/URL` | Import pre-built images from a manifest file or URL (JSON) |
