@@ -43,7 +43,7 @@ def main():
     parser.add_argument("-o", "--output", dest="output_file", metavar="FILE",
                         help="Output file for generated manifest (default: imports.json, use '-' for stdout)")
     parser.add_argument("--force", action="store_true",
-                        help="Force import even if template already exists in Proxmox (removes and re-imports)")
+                        help="Force operation: for imports, removes and re-imports existing templates; for --self-update, discards local changes")
 
     # Template selection arguments
     parser.add_argument("--only", help="Process only specified templates (comma-separated list)")
@@ -124,7 +124,7 @@ def main():
 
     # Handle self-update early and exit
     if args.self_update:
-        success = self_update(paths['install_dir'], logger)
+        success = self_update(paths['install_dir'], logger, force=args.force)
         sys.exit(0 if success else 1)
 
     # Handle shell completions setup and exit

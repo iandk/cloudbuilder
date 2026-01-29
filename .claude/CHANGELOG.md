@@ -6,6 +6,27 @@
 
 ## 2025-01-29
 
+### Self-Update Local Changes Handling
+
+**Enhanced `--self-update` to handle local modifications gracefully**
+- Previously, `--self-update` would fail with cryptic git error if local changes existed
+- Now detects local changes before attempting update using `git status --porcelain`
+- Without `--force`: Shows clear error with options (use force, or manually stash)
+- With `--force`: Uses `git reset --hard` to discard local changes and sync with remote
+- Extended `--force` flag to work with `--self-update` (previously only worked with imports)
+- Files affected: `utils.py`, `cloudbuilder.py`
+
+**Example usage:**
+```bash
+# If local changes exist, this now shows helpful options instead of git error
+cloudbuilder --self-update
+
+# Force update, discarding any local changes
+cloudbuilder --self-update --force
+```
+
+---
+
 ### Manifest Import/Export Improvements
 
 **Relative URL Resolution for Remote Manifests**

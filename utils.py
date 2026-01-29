@@ -128,13 +128,14 @@ def validate_template_selection(
             sys.exit(1)
 
 
-def self_update(install_dir: Path, logger: logging.Logger) -> bool:
+def self_update(install_dir: Path, logger: logging.Logger, force: bool = False) -> bool:
     """
     Update cloudbuilder from git repository if installed from git.
 
     Args:
         install_dir: The installation directory of cloudbuilder
         logger: Logger instance
+        force: If True, discard local changes and reset to remote version
 
     Returns:
         True if update was successful or not a git repo, False on error
@@ -170,6 +171,32 @@ def self_update(install_dir: Path, logger: logging.Logger) -> bool:
         )
         old_commit = result.stdout.strip()
 
+        # Check for local changes (staged or unstaged)
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=install_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        local_changes = result.stdout.strip()
+
+        if local_changes:
+            changed_files = [line.split()[-1] for line in local_changes.split('\n') if line]
+            logger.warning(f"Local changes detected in: {', '.join(changed_files)}")
+
+            if not force:
+                logger.error("Cannot update: local changes would be overwritten")
+                logger.info("Options:")
+                logger.info("  1. Use --force with --self-update to discard local changes")
+                logger.info("  2. Manually commit or stash your changes:")
+                logger.info(f"     cd {install_dir} && git stash")
+                logger.info("     cloudbuilder --self-update")
+                logger.info(f"     cd {install_dir} && git stash pop")
+                return False
+
+            logger.info("Force mode enabled, discarding local changes...")
+
         # Fetch from remote
         logger.info("Fetching updates from remote...")
         subprocess.run(
@@ -190,20 +217,33 @@ def self_update(install_dir: Path, logger: logging.Logger) -> bool:
         )
         updates_available = int(result.stdout.strip())
 
-        if updates_available == 0:
+        if updates_available == 0 and not local_changes:
             logger.info("Already up to date")
             return True
 
-        logger.info(f"{updates_available} update(s) available, pulling changes...")
+        if updates_available > 0:
+            logger.info(f"{updates_available} update(s) available")
 
-        # Pull changes
-        result = subprocess.run(
-            ["git", "pull"],
-            cwd=install_dir,
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        # If we have local changes and force mode, use reset instead of pull
+        if local_changes and force:
+            logger.info(f"Resetting to origin/{current_branch}...")
+            subprocess.run(
+                ["git", "reset", "--hard", f"origin/{current_branch}"],
+                cwd=install_dir,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+        elif updates_available > 0:
+            # No local changes, safe to pull
+            logger.info("Pulling changes...")
+            subprocess.run(
+                ["git", "pull"],
+                cwd=install_dir,
+                capture_output=True,
+                text=True,
+                check=True
+            )
 
         # Get new commit
         result = subprocess.run(
@@ -215,20 +255,23 @@ def self_update(install_dir: Path, logger: logging.Logger) -> bool:
         )
         new_commit = result.stdout.strip()
 
-        logger.info(f"Successfully updated from {old_commit} to {new_commit}")
+        if old_commit != new_commit:
+            logger.info(f"Successfully updated from {old_commit} to {new_commit}")
 
-        # Show recent commits
-        result = subprocess.run(
-            ["git", "log", f"{old_commit}..{new_commit}", "--oneline"],
-            cwd=install_dir,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        if result.stdout.strip():
-            logger.info("Changes:")
-            for line in result.stdout.strip().split('\n'):
-                logger.info(f"  {line}")
+            # Show recent commits
+            result = subprocess.run(
+                ["git", "log", f"{old_commit}..{new_commit}", "--oneline"],
+                cwd=install_dir,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            if result.stdout.strip():
+                logger.info("Changes:")
+                for line in result.stdout.strip().split('\n'):
+                    logger.info(f"  {line}")
+        else:
+            logger.info("Already up to date (local changes were discarded)")
 
         return True
 

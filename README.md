@@ -101,6 +101,9 @@ Create a `templates.json` file in the current directory:
 # Update cloudbuilder itself
 ./cloudbuilder.py --self-update
 
+# Force update (discards local changes if any)
+./cloudbuilder.py --self-update --force
+
 # Set up shell tab completions
 ./cloudbuilder.py --setup-completions
 ```
@@ -208,7 +211,7 @@ cd /var/lib/cloudbuilder/templates && python3 -m http.server 8080
 | `--generate-manifest DIR` | Generate manifest JSON from a directory of qcow2/img files |
 | `--base-url URL` | Optional: prefix sources with full URL in generated manifest (by default, outputs just filenames which are resolved relative to manifest URL on import) |
 | `-o, --output FILE` | Output file for generated manifest (default: imports.json, use '-' for stdout) |
-| `--force` | Force import even if template exists in Proxmox (removes and re-imports) |
+| `--force` | Force operation: for imports, removes and re-imports existing templates; for `--self-update`, discards local changes |
 | `--only LIST` | Process only specific templates (comma-separated) |
 | `--except LIST` | Process all templates except specified ones (comma-separated) |
 | `--config PATH` | Path to templates configuration file (default: templates.json) |
