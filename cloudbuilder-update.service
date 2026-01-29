@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudbuilder Self-Update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cloudbuilder --self-update
+# Don't fail the service if self-update fails (e.g., local changes exist)
+# This keeps it safe - it will just skip the update
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=multi-user.target

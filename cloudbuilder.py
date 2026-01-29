@@ -302,8 +302,7 @@ def main():
         if success_count > 0:
             logger.info(f"Import complete: {success_count}/{len(filtered_manifest)} template(s) imported")
         elif skipped_count > 0:
-            logger.info(f"All {skipped_count} template(s) already exist in Proxmox.")
-            console.print("[dim]  --force    Re-import and overwrite existing templates[/dim]")
+            logger.info(f"All {skipped_count} template(s) already exist. Use --force to overwrite.")
         sys.exit(0 if success_count == len(filtered_manifest) else 1)
 
     # Parse template selection
@@ -497,10 +496,7 @@ def main():
         if built_templates:
             logger.info(f"Processed {len(built_templates)} template(s)")
         elif up_to_date_count > 0:
-            logger.info(f"All {up_to_date_count} template(s) up to date.")
-            console.print("[dim]  --update   Update packages in existing images[/dim]")
-            console.print("[dim]  --rebuild  Download fresh images and rebuild[/dim]")
-            console.print("[dim]  --status   Show detailed template status table[/dim]")
+            logger.info(f"All {up_to_date_count} template(s) up to date. Use --update or --rebuild to refresh.")
 
     except Exception as e:
         logger.error(f"An error occurred: {e}", exc_info=True)

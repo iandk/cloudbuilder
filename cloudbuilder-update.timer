@@ -1,0 +1,13 @@
+[Unit]
+Description=Nightly Cloudbuilder Self-Update
+
+[Timer]
+# Run at 3am every night
+OnCalendar=*-*-* 03:00:00
+# Add random delay up to 1 hour to avoid thundering herd on multiple systems
+RandomizedDelaySec=3600
+# Catch up if system was off during scheduled time
+Persistent=true
+
+[Install]
+WantedBy=timers.target

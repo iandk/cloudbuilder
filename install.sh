@@ -35,7 +35,20 @@ chmod +x "$INSTALL_DIR/cloudbuilder.py"
 echo "Setting up shell completions..."
 cloudbuilder --setup-completions
 
+# Set up automatic nightly self-update timer
+echo "Setting up automatic self-update timer..."
+cp "$INSTALL_DIR/cloudbuilder-update.service" /etc/systemd/system/
+cp "$INSTALL_DIR/cloudbuilder-update.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now cloudbuilder-update.timer
+
+echo ""
 echo "Cloudbuilder installed successfully."
 echo "Configuration file: $INSTALL_DIR/templates.json"
 echo "Template directory: $DATA_DIR/templates"
 echo "Log directory: $LOG_DIR"
+echo ""
+echo "Automatic updates: Enabled (runs nightly at 3am)"
+echo "  Check timer:  systemctl status cloudbuilder-update.timer"
+echo "  Check logs:   journalctl -u cloudbuilder-update"
+echo "  Disable:      systemctl disable cloudbuilder-update.timer"
