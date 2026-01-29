@@ -37,7 +37,8 @@ def main():
     parser.add_argument("--import-manifest", dest="import_manifest", metavar="FILE",
                         help="Import pre-built images from a manifest file (JSON with source paths/URLs)")
     parser.add_argument("--generate-manifest", dest="generate_manifest", metavar="DIR",
-                        help="Generate a manifest JSON from a directory of qcow2/img files")
+                        nargs='?', const=str(paths['template_dir']),
+                        help="Generate a manifest JSON from a directory of qcow2/img files (default: template directory)")
     parser.add_argument("--base-url", dest="base_url", metavar="URL",
                         help="Base URL to prefix sources in generated manifest (use with --generate-manifest)")
     parser.add_argument("-o", "--output", dest="output_file", metavar="FILE",
@@ -219,6 +220,7 @@ def main():
 
         # Process each import
         success_count = 0
+        skipped_count = 0
         for name, config in filtered_manifest.items():
             try:
                 source = config.get("source")
@@ -237,7 +239,7 @@ def main():
                 existing_vmid = proxmox_templates.get(name)
                 if existing_vmid:
                     if not args.force:
-                        logger.warning(f"Template '{name}' already exists in Proxmox (VMID: {existing_vmid}), skipping (use --force to overwrite)")
+                        skipped_count += 1
                         continue
 
                     # Force mode: check for linked clones before removing
@@ -296,7 +298,12 @@ def main():
                 logger.error(f"Failed to import template '{name}': {e}", exc_info=True)
                 continue
 
-        logger.info(f"Import complete: {success_count}/{len(filtered_manifest)} templates imported successfully")
+        # Print import summary
+        if success_count > 0:
+            logger.info(f"Import complete: {success_count}/{len(filtered_manifest)} template(s) imported")
+        elif skipped_count > 0:
+            logger.info(f"All {skipped_count} template(s) already exist in Proxmox.")
+            console.print("[dim]  --force    Re-import and overwrite existing templates[/dim]")
         sys.exit(0 if success_count == len(filtered_manifest) else 1)
 
     # Parse template selection
@@ -490,7 +497,10 @@ def main():
         if built_templates:
             logger.info(f"Processed {len(built_templates)} template(s)")
         elif up_to_date_count > 0:
-            logger.info(f"All {up_to_date_count} template(s) up to date. Use --update to refresh or --rebuild to recreate.")
+            logger.info(f"All {up_to_date_count} template(s) up to date.")
+            console.print("[dim]  --update   Update packages in existing images[/dim]")
+            console.print("[dim]  --rebuild  Download fresh images and rebuild[/dim]")
+            console.print("[dim]  --status   Show detailed template status table[/dim]")
 
     except Exception as e:
         logger.error(f"An error occurred: {e}", exc_info=True)

@@ -169,14 +169,17 @@ Import templates from pre-built qcow2/img files without going through the custom
 **Generating a manifest from a directory:**
 
 ```bash
-# Generate manifest (writes to imports.json by default)
-./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/
+# Generate manifest from template directory (default location)
+./cloudbuilder.py --generate-manifest
+
+# Generate manifest from a specific directory
+./cloudbuilder.py --generate-manifest /path/to/images/
 
 # Specify output file
-./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ -o my-manifest.json
+./cloudbuilder.py --generate-manifest -o my-manifest.json
 
 # Output to stdout (for piping)
-./cloudbuilder.py --generate-manifest /var/lib/cloudbuilder/templates/ -o -
+./cloudbuilder.py --generate-manifest -o -
 
 # Serve the directory with a simple HTTP server
 cd /var/lib/cloudbuilder/templates && python3 -m http.server 8080
@@ -208,7 +211,7 @@ cd /var/lib/cloudbuilder/templates && python3 -m http.server 8080
 | `--self-update` | Update cloudbuilder from git repository |
 | `--setup-completions` | Set up shell autocompletions (bash/zsh) |
 | `--import-manifest FILE/URL` | Import pre-built images from a manifest file or URL (JSON) |
-| `--generate-manifest DIR` | Generate manifest JSON from a directory of qcow2/img files |
+| `--generate-manifest [DIR]` | Generate manifest JSON from a directory of qcow2/img files (default: template directory) |
 | `--base-url URL` | Optional: prefix sources with full URL in generated manifest (by default, outputs just filenames which are resolved relative to manifest URL on import) |
 | `-o, --output FILE` | Output file for generated manifest (default: imports.json, use '-' for stdout) |
 | `--force` | Force operation: for imports, removes and re-imports existing templates; for `--self-update`, discards local changes |
