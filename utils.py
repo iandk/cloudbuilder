@@ -22,8 +22,11 @@ def is_proxmox_available() -> bool:
         True if running on a Proxmox VE system with pvesh available, False otherwise.
     """
     try:
+        # Use 'pvesh get /version' instead of '--version' since pvesh
+        # doesn't support the --version flag. This API call will succeed
+        # on any working Proxmox installation.
         result = subprocess.run(
-            ["pvesh", "--version"],
+            ["pvesh", "get", "/version", "--output-format", "json"],
             capture_output=True,
             text=True,
             timeout=5
