@@ -4,6 +4,31 @@
 
 ---
 
+## 2025-01-31
+
+### XZ Compressed Image Support
+
+**Added automatic decompression of XZ-compressed cloud images**
+- Download function now detects URLs ending with `.xz` extension
+- Automatically decompresses XZ files after download using Python's `lzma` module
+- Fixes FreeBSD template import which provides qcow2 images as `.qcow2.xz` archives
+- Compressed file is removed after decompression to save space
+- Error handling updated to clean up both compressed and decompressed files on failure
+- Files affected: `template.py`
+
+**Example:**
+```
+# FreeBSD image URL ends with .qcow2.xz
+"image_url": "https://download.freebsd.org/.../FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
+
+# Now automatically:
+# 1. Downloads to freebsd-14.qcow2.xz
+# 2. Decompresses to freebsd-14.qcow2
+# 3. Removes the .xz file
+```
+
+---
+
 ## 2025-01-29
 
 ### Standalone Mode Support

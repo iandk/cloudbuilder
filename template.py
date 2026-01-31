@@ -3,6 +3,7 @@
 
 import json
 import logging
+import lzma
 import os
 import shutil
 import subprocess
@@ -145,44 +146,59 @@ class TemplateManager:
         """Download template image to temporary directory."""
         temp_file = self.temp_dir / f"{template.name}.qcow2"
         template_path = self.get_template_path(template)
-        
+
         # If template exists locally and use_existing is True, use existing file
         if use_existing and template_path.exists():
             self.logger.info(f"Using existing template file for {template.name}")
             shutil.copy2(template_path, temp_file)
             return temp_file
-        
+
+        # Check if URL points to a compressed file
+        is_xz_compressed = template.image_url.endswith('.xz')
+        download_file = self.temp_dir / f"{template.name}.qcow2.xz" if is_xz_compressed else temp_file
+
         # Otherwise download new image
         self.logger.info(f"Downloading image for {template.name}")
         try:
             # First check if the URL is accessible
             head_response = requests.head(template.image_url, timeout=30)
             head_response.raise_for_status()
-            
+
             response = requests.get(template.image_url, stream=True, timeout=30)
             response.raise_for_status()
-            
+
             total_size = int(response.headers.get('content-length', 0))
-            
+
             with console.status(f"Downloading {template.name}", spinner="dots") as status:
                 start_time = time.time()
                 downloaded = 0
-                
-                with open(temp_file, 'wb') as f:
+
+                with open(download_file, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         if time.time() - start_time > DOWNLOAD_TIMEOUT:
                             raise TimeoutError(f"Download timeout after {DOWNLOAD_TIMEOUT} seconds")
-                        
+
                         f.write(chunk)
                         downloaded += len(chunk)
-                
-                return temp_file
+
+            # Decompress XZ file if needed
+            if is_xz_compressed:
+                self.logger.info(f"Decompressing XZ archive for {template.name}")
+                with console.status(f"Decompressing {template.name}", spinner="dots"):
+                    with lzma.open(download_file, 'rb') as xz_file:
+                        with open(temp_file, 'wb') as out_file:
+                            shutil.copyfileobj(xz_file, out_file)
+                    # Remove the compressed file
+                    download_file.unlink()
+
+            return temp_file
                 
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Failed to download image for {template.name} from {template.image_url}: {e}")
-            if temp_file.exists():
-                temp_file.unlink()
-                
+            for f in [temp_file, download_file]:
+                if f.exists():
+                    f.unlink()
+
             # If download fails but we have a local template, use it as fallback
             if template_path.exists():
                 self.logger.warning(f"Download failed, using existing local template as fallback for {template.name}")
@@ -191,8 +207,9 @@ class TemplateManager:
             raise
         except Exception as e:
             self.logger.error(f"Failed to download image for {template.name}: {e}")
-            if temp_file.exists():
-                temp_file.unlink()
+            for f in [temp_file, download_file]:
+                if f.exists():
+                    f.unlink()
             raise
 
     def resize_image_if_needed(self, template: Template, image_path: Path) -> None:
