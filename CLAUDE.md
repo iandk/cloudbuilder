@@ -1,4 +1,4 @@
-# v6Node Cloud Image Builder
+# Cloudbuilder
 
 > Project-specific context for AI assistants working on the cloudbuilder project.
 
@@ -17,7 +17,7 @@ See `.claude/INSTRUCTIONS.md` for full requirements. At minimum:
 
 ## Project Overview
 
-**Purpose**: Build customized VM templates for v6Node cloud hosting using Proxmox VE and `virt-customize` from libguestfs.
+**Purpose**: Build customized VM templates using Proxmox VE and `virt-customize` from libguestfs.
 
 **Key Files**:
 - `templates.json` - Main configuration defining all OS templates
@@ -122,8 +122,8 @@ htop/bpytop are in base repos - **no EPEL needed**.
 - Script runs on every interactive shell
 - **Must guard against multiple displays**:
 ```bash
-[ -n "$V6NODE_MOTD_SHOWN" ] && return
-export V6NODE_MOTD_SHOWN=1
+[ -n "$CLOUDBUILDER_MOTD_SHOWN" ] && return
+export CLOUDBUILDER_MOTD_SHOWN=1
 ```
 - Check for interactive shell: `[ -z "$PS1" ] && return`
 
@@ -131,7 +131,7 @@ export V6NODE_MOTD_SHOWN=1
 
 ## Security Hardening Applied
 
-### Sysctl (`/etc/sysctl.d/99-v6node.conf`)
+### Sysctl (`/etc/sysctl.d/99-cloudbuilder.conf`)
 
 ```
 net.ipv4.tcp_syncookies=1              # SYN flood protection
@@ -232,7 +232,7 @@ sed -i 's/\(FILTER_RPC_ARGS="--allow-rpcs=.*\)"/\1,guest-exec,guest-exec-status"
 | `/etc/profile.d/prompt.sh`          | Cyan prompt (root), Green prompt (users)       |
 | `/etc/profile.d/motd.sh`            | Dynamic MOTD (RHEL/Fedora only)                |
 | `/etc/profile.d/history-timestamps.sh` | Bash history with timestamps                |
-| `/etc/update-motd.d/00-v6node`      | Dynamic MOTD (Debian/Ubuntu only)              |
+| `/etc/update-motd.d/00-cloudbuilder` | Dynamic MOTD (Debian/Ubuntu only)              |
 
 ---
 
@@ -304,7 +304,7 @@ After building a template and creating a VM:
 1. SSH Access - Can connect via SSH
 2. Machine ID - `cat /etc/machine-id` - should be unique per VM
 3. SSH Host Keys - Should differ between VMs
-4. MOTD Display - v6Node branded MOTD with system info
+4. MOTD Display - Cloudbuilder branded MOTD with system info
 5. Colors - `ls --color=auto` works, man pages colored
 6. Prompt - Colored prompt displays correctly
 7. Guest Agent - `systemctl status qemu-guest-agent` - running
@@ -321,9 +321,9 @@ After building a template and creating a VM:
 | Color aliases         | `/etc/profile.d/colors.sh`                     |
 | Colored prompt        | `/etc/profile.d/prompt.sh`                     |
 | Dynamic MOTD (RHEL)   | `/etc/profile.d/motd.sh`                       |
-| Dynamic MOTD (Debian) | `/etc/update-motd.d/00-v6node`                 |
+| Dynamic MOTD (Debian) | `/etc/update-motd.d/00-cloudbuilder`           |
 | History timestamps    | `/etc/profile.d/history-timestamps.sh`         |
-| Sysctl hardening      | `/etc/sysctl.d/99-v6node.conf`                 |
+| Sysctl hardening      | `/etc/sysctl.d/99-cloudbuilder.conf`           |
 | Journald limits       | `/etc/systemd/journald.conf.d/size-limit.conf` |
 | I/O scheduler         | `/etc/udev/rules.d/60-virtio-scheduler.rules`  |
 

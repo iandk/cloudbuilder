@@ -1,0 +1,86 @@
+#!/bin/bash
+# Cloudbuilder MOTD - displays system info on login
+
+if [ "$1" = "--install" ]; then
+    SCRIPT_PATH="$0"
+
+    if [ -d /etc/update-motd.d ]; then
+        # Debian/Ubuntu: use update-motd.d
+        cp "$SCRIPT_PATH" /etc/update-motd.d/00-cloudbuilder
+        chmod -x /etc/update-motd.d/* 2>/dev/null
+        chmod +x /etc/update-motd.d/00-cloudbuilder
+
+        # Configure PAM to use dynamic motd
+        sed -i 's/^session.*pam_motd.so/#&/' /etc/pam.d/sshd
+        echo 'session    optional     pam_motd.so motd=/run/motd.dynamic' >> /etc/pam.d/sshd
+
+        # Disable Ubuntu motd-news and remove default scripts
+        systemctl disable motd-news.timer motd-news.service 2>/dev/null || true
+        rm -f /etc/update-motd.d/{10-help-text,50-motd-news,90-updates-available,91-release-upgrade,95-hwe-eol} \
+              /var/lib/update-notifier/updates-available /etc/motd.d/* 2>/dev/null || true
+
+        # Disable cloud-init MOTD modules
+        cat > /etc/cloud/cloud.cfg.d/99-disable-motd.cfg << 'EOFCFG'
+#cloud-config
+cloud_final_modules:
+  - scripts-user
+EOFCFG
+    else
+        # RHEL/Fedora: use profile.d with shell guards
+        {
+            echo '#!/bin/bash'
+            echo '[ -z "$PS1" ] && return'
+            echo '[ -n "$CLOUDBUILDER_MOTD_SHOWN" ] && return'
+            echo 'export CLOUDBUILDER_MOTD_SHOWN=1'
+            echo ''
+            # Append display code (skip shebang and install block)
+            sed -n '/^# --- MOTD Display ---$/,$p' "$SCRIPT_PATH"
+        } > /etc/profile.d/motd.sh
+        chmod +x /etc/profile.d/motd.sh
+    fi
+
+    # Common setup
+    sed -i 's/^#*PrintLastLog.*/PrintLastLog no/' /etc/ssh/sshd_config
+    echo -n > /etc/motd
+    rm -f "$SCRIPT_PATH"  # Clean up staged file
+    exit 0
+fi
+
+# --- MOTD Display ---
+CYAN='\033[38;5;44m'
+GRAY='\033[38;5;245m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+HOSTNAME=$(hostname)
+IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+UPTIME=$(uptime -p 2>/dev/null | sed 's/up //' || uptime | sed 's/.*up //' | sed 's/,.*user.*//')
+MEM_USED=$(free -h | awk '/^Mem:/ {print $3}')
+MEM_TOTAL=$(free -h | awk '/^Mem:/ {print $2}')
+DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
+DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
+LOAD=$(cat /proc/loadavg | awk '{print $1}')
+KERN=$(uname -r)
+OS=$(. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-Linux}")
+CORES=$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo)
+CPU=$(lscpu 2>/dev/null | awk -F': +' '/Model name/ {print $2; exit}' | sed 's/(R)//g; s/(TM)//g; s/CPU //g; s/ Processor//g; s/ 64-Core//g; s/ @.*//g' | cut -c1-25)
+
+if command -v last &>/dev/null; then
+    LAST=$(last -1 -R root 2>/dev/null | awk 'NR==1 && !/^$/ && !/wtmp/ {print $3, $4, $5, $6}')
+    LASTIP=$(last -1 root 2>/dev/null | awk 'NR==1 && !/^$/ && !/wtmp/ {print $3}')
+    [ -n "$LAST" ] && LAST_LINE="\n   ${GRAY}Last login${RESET} $LAST ${GRAY}from${RESET} ${BOLD}$LASTIP${RESET}"
+fi
+
+echo -e "\n${CYAN}--${RESET} Cloudbuilder ${CYAN}----------------------------------------------------${RESET}\n
+   ${GRAY}Hostname${RESET}   ${BOLD}$HOSTNAME${RESET}
+   ${GRAY}IP${RESET}         ${BOLD}$IP${RESET}
+   ${GRAY}Kernel${RESET}     $KERN
+   ${GRAY}OS${RESET}         $OS
+
+   ${GRAY}CPU${RESET}        ${BOLD}$CORES${RESET} cores ${GRAY}($CPU)${RESET}
+   ${GRAY}Memory${RESET}     ${BOLD}$MEM_USED${RESET} ${GRAY}/${RESET} $MEM_TOTAL
+   ${GRAY}Disk${RESET}       ${BOLD}$DISK_USED${RESET} ${GRAY}/${RESET} $DISK_TOTAL
+   ${GRAY}Load${RESET}       ${BOLD}$LOAD${RESET}
+   ${GRAY}Uptime${RESET}     $UPTIME${LAST_LINE}
+${CYAN}------------------------------------------------------------------------${RESET}
+"

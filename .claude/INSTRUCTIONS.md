@@ -1,4 +1,4 @@
-# LLM Instructions for CloudBuilder
+# LLM Instructions for Cloudbuilder
 
 > Mandatory instructions for any LLM working on this project.
 
@@ -18,6 +18,7 @@ Update this file for EVERY change, no matter how small:
 ### Category (e.g., "Templates.json Changes", "Bug Fixes", "New Features")
 
 **Brief Title**
+
 - What was changed
 - Why it was changed (if not obvious)
 - Which files/templates were affected
@@ -26,6 +27,7 @@ Update this file for EVERY change, no matter how small:
 ### 2. CLAUDE.md (Root directory)
 
 Update if the change affects:
+
 - Template structure or fields
 - Distro-specific behaviors
 - Build pipeline behavior
@@ -35,6 +37,7 @@ Update if the change affects:
 ### 3. README.md
 
 Update if the change affects:
+
 - User-facing behavior
 - CLI options
 - Configuration format
@@ -74,6 +77,7 @@ Update if the change affects:
 ### Crontab Syntax Standard
 
 Always use this pattern:
+
 ```bash
 (crontab -l 2>/dev/null; echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || systemctl start qemu-guest-agent') | crontab -
 ```
@@ -88,6 +92,7 @@ Always use this pattern:
 ### SSH Key Regeneration
 
 Include near the end of `run_commands`, before cloud-init cleanup:
+
 - RHEL/Fedora: `rm -f /etc/ssh/ssh_host_*` + `systemctl enable sshd-keygen.target` + `systemctl enable sshd`
 - Debian/Ubuntu: `rm -f /etc/ssh/ssh_host_*` + `systemctl enable ssh`
 
@@ -105,10 +110,10 @@ After modifying templates.json:
 
 ## File Locations
 
-| File | Purpose |
-|------|---------|
-| `CLAUDE.md` | Main LLM context - template structure, patterns, solutions |
-| `.claude/CHANGELOG.md` | All changes with dates and details |
-| `.claude/INSTRUCTIONS.md` | This file - LLM behavior requirements |
-| `README.md` | User documentation |
-| `templates.json` | Template definitions |
+| File                      | Purpose                                                    |
+| ------------------------- | ---------------------------------------------------------- |
+| `CLAUDE.md`               | Main LLM context - template structure, patterns, solutions |
+| `.claude/CHANGELOG.md`    | All changes with dates and details                         |
+| `.claude/INSTRUCTIONS.md` | This file - LLM behavior requirements                      |
+| `README.md`               | User documentation                                         |
+| `templates.json`          | Template definitions                                       |
