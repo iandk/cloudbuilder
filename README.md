@@ -5,6 +5,7 @@ CloudBuilder is a tool for managing VM templates in Proxmox. It automates downlo
 ## Features
 
 - **Template Management**: Download, customize, and import VM templates
+- **File Import**: Copy files from host into template images during build
 - **Standalone Mode**: Build templates locally without Proxmox (auto-detected or via `--build-only`)
 - **Import Pre-built Images**: Import existing qcow2/img files from local paths or URLs
 - **Minimal Downtime**: Updates templates with minimal unavailability in Proxmox
@@ -71,6 +72,31 @@ Create a `templates.json` file in the current directory:
 }
 ```
 
+### Copying Files into Templates
+
+Use `copy_files` to embed files into the template image. Files are copied after package installation but before `run_commands`, so they're available for commands to use.
+
+```json
+{
+    "my-template": {
+        "image_url": "https://example.com/image.qcow2",
+        "install_packages": ["nginx"],
+        "copy_files": {
+            "files/nginx.conf": "/etc/nginx/",
+            "files/scripts/setup.sh": "/usr/local/bin/"
+        },
+        "run_commands": [
+            "chmod +x /usr/local/bin/setup.sh",
+            "/usr/local/bin/setup.sh"
+        ]
+    }
+}
+```
+
+- **Keys**: Local file paths (relative to cloudbuilder directory or absolute)
+- **Values**: Destination directories inside the image (must end with `/`)
+- **Recommended**: Store files in the `files/` directory in the cloudbuilder root
+
 ### Template Configuration Options
 
 | Option | Description |
@@ -78,6 +104,7 @@ Create a `templates.json` file in the current directory:
 | `image_url` | URL to download the cloud image |
 | `install_packages` | List of packages to install |
 | `update_packages` | Whether to update packages via virt-customize (recommend `false`, do manual upgrade in run_commands instead) |
+| `copy_files` | Object mapping local file paths to destination directories in the image |
 | `run_commands` | Custom commands to run during customization |
 | `ssh_password_auth` | Enable password authentication for SSH |
 | `ssh_root_login` | Allow root login via SSH |

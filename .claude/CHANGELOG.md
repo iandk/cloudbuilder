@@ -6,6 +6,26 @@
 
 ## 2025-01-31
 
+### File Import Feature (`copy_files`)
+
+**Added support for copying files from host into template images**
+- New `copy_files` field in templates.json allows specifying files to copy into the image
+- Uses `virt-customize --copy-in` under the hood
+- Files are copied after `install_packages` but before `run_commands`
+- Paths are resolved relative to the cloudbuilder directory (where templates.json is)
+- Validates that source files exist before starting customization
+- Files affected: `template.py`, `README.md`, `CLAUDE.md`
+
+### Documentation Cleanup
+
+**Reduced redundancy between README.md and CLAUDE.md**
+- README.md: User-facing documentation (usage, configuration, examples)
+- CLAUDE.md: Implementation details for AI assistants (distro quirks, troubleshooting)
+- Removed duplicate template structure examples and copy_files docs from CLAUDE.md
+- CLAUDE.md now references README.md for configuration details
+
+---
+
 ### XZ Compressed Image Support
 
 **Added automatic decompression of XZ-compressed cloud images**

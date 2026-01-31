@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Install dependencies
-apt update && apt install -y python3 python3-pip python3-rich libguestfs-tools wget jq unzip curl git
+apt update && apt install -y python3 python3-pip python3-rich libguestfs-tools wget jq unzip curl git ovmf
 
 # Installation directories
 INSTALL_DIR="/opt/cloudbuilder"

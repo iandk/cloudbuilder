@@ -42,6 +42,7 @@ class Template:
     ssh_password_auth: bool
     ssh_root_login: bool
     min_size: Optional[str] = None  # Minimum disk size (e.g., "1G", "500M")
+    copy_files: Optional[Dict[str, str]] = None  # Local path -> destination path mapping
     build_date: Optional[str] = None
     last_update: Optional[str] = None
     vmid: Optional[int] = None
@@ -100,7 +101,8 @@ class TemplateManager:
                     run_commands=t.get("run_commands", []),
                     ssh_password_auth=t.get("ssh_password_auth", False),
                     ssh_root_login=t.get("ssh_root_login", False),
-                    min_size=t.get("min_size")
+                    min_size=t.get("min_size"),
+                    copy_files=t.get("copy_files")
                 )
                 
                 # Load metadata if available
@@ -273,6 +275,7 @@ class TemplateManager:
             update_mode or
             template.install_packages or
             template.run_commands or
+            template.copy_files or
             template.ssh_password_auth or
             template.ssh_root_login
         )
@@ -293,6 +296,23 @@ class TemplateManager:
 
         if template.install_packages:
             commands.extend(["--install", ",".join(template.install_packages)])
+
+        # Copy files into the image (before run_commands so copied files are available)
+        if template.copy_files:
+            config_dir = Path(self.config_path).parent
+            for local_path, dest_path in template.copy_files.items():
+                # Resolve relative paths against the config directory
+                source_path = Path(local_path)
+                if not source_path.is_absolute():
+                    source_path = config_dir / source_path
+                source_path = source_path.resolve()
+
+                if not source_path.exists():
+                    raise FileNotFoundError(f"Copy source file not found: {source_path}")
+
+                # virt-customize --copy-in format: local_path:remote_dir
+                commands.extend(["--copy-in", f"{source_path}:{dest_path}"])
+                self.logger.debug(f"Will copy {source_path} to {dest_path} in image")
 
         for cmd in template.run_commands:
             commands.extend(["--run-command", cmd])

@@ -29,7 +29,7 @@ See `.claude/INSTRUCTIONS.md` for full requirements. At minimum:
 ## Build Pipeline
 
 ```
-Download → install_packages → run_commands → SSH settings → Upload to Proxmox
+Download → install_packages → copy_files → run_commands → SSH settings → Upload to Proxmox
 ```
 
 ### Critical: Execution Order
@@ -40,9 +40,13 @@ Download → install_packages → run_commands → SSH settings → Upload to Pr
 - EPEL packages (htop, bpytop on RHEL) must be installed via `run_commands` AFTER enabling EPEL
 - Any repository configuration must happen in `run_commands` before dependent packages
 
+### File Copying (`copy_files`)
+
+Uses `virt-customize --copy-in`. Paths are resolved relative to the cloudbuilder directory. See README for usage examples.
+
 ---
 
-## Current Templates (7 total)
+## Current Templates
 
 | Template     | Base Image      | Package Manager | MOTD Mechanism |
 | ------------ | --------------- | --------------- | -------------- |
@@ -58,27 +62,11 @@ Download → install_packages → run_commands → SSH settings → Upload to Pr
 
 ## Template Structure
 
-```json
-{
-  "template-name": {
-    "image_url": "https://...",
-    "install_packages": ["pkg1", "pkg2"],
-    "update_packages": false,
-    "run_commands": [
-      "apt-get update && apt-get -y dist-upgrade",
-      "...",
-      "rm -f /etc/ssh/ssh_host_*",
-      "systemctl enable ssh",
-      "rm -rf /var/lib/cloud/instance /var/lib/cloud/data",
-      "truncate -s 0 /etc/machine-id"
-    ],
-    "ssh_password_auth": false,
-    "ssh_root_login": false
-  }
-}
-```
+See README.md for configuration options and examples. Key implementation notes:
 
-**Note**: `update_packages` is set to `false` and manual upgrade is done in `run_commands` for reliability.
+- `update_packages`: Set to `false`; manual upgrade in `run_commands` is more reliable
+- `copy_files`: Dict mapping local paths to guest directories (uses `--copy-in`)
+- `run_commands`: Must end with machine-id truncation and cloud-init cleanup
 
 ---
 
@@ -355,3 +343,4 @@ After building a template and creating a VM:
 - **2025-01-29**: Changed to manual package upgrades (update_packages: false)
 - **2025-01-29**: Added SSH key regeneration to ALL templates
 - **2025-01-29**: Created `.claude/` documentation structure
+- **2025-01-31**: Added `copy_files` feature for importing files into templates
