@@ -47,14 +47,16 @@ EOFCFG
 fi
 
 # --- MOTD Display ---
-CYAN='\033[38;5;44m'
+BLUE='\033[38;5;33m'
 GRAY='\033[38;5;245m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
 HOSTNAME=$(hostname)
-IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-UPTIME=$(uptime -p 2>/dev/null | sed 's/up //' || uptime | sed 's/.*up //' | sed 's/,.*user.*//')
+IP=$(hostname -I 2>/dev/null | sed 's/[[:space:]]*$//')
+[ -z "$IP" ] && IP=$(ip -o addr show scope global 2>/dev/null | awk '{gsub(/\/.*/, "", $4); printf "%s ", $4}' | sed 's/[[:space:]]*$//')
+UPTIME=$(uptime -p 2>/dev/null | sed 's/up //')
+[ -z "$UPTIME" ] && UPTIME=$(uptime | sed 's/.*up //' | sed 's/,.*user.*//' | sed 's/,.*load.*//')
 MEM_USED=$(free -h | awk '/^Mem:/ {print $3}')
 MEM_TOTAL=$(free -h | awk '/^Mem:/ {print $2}')
 DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
@@ -71,9 +73,13 @@ if command -v last &>/dev/null; then
     [ -n "$LAST" ] && LAST_LINE="\n   ${GRAY}Last login${RESET} $LAST ${GRAY}from${RESET} ${BOLD}$LASTIP${RESET}"
 fi
 
-echo -e "\n${CYAN}--${RESET} Cloudbuilder ${CYAN}----------------------------------------------------${RESET}\n
+BRAND="v6Node Cloud"
+LINE_WIDTH=72
+DASHES=$(printf '%*s' $((LINE_WIDTH - 4 - ${#BRAND})) '' | tr ' ' '-')
+
+echo -e "\n${BLUE}--${RESET} ${BRAND} ${BLUE}${DASHES}${RESET}\n
    ${GRAY}Hostname${RESET}   ${BOLD}$HOSTNAME${RESET}
-   ${GRAY}IP${RESET}         ${BOLD}$IP${RESET}
+   ${GRAY}IPs${RESET}        ${BOLD}$IP${RESET}
    ${GRAY}Kernel${RESET}     $KERN
    ${GRAY}OS${RESET}         $OS
 
@@ -82,5 +88,5 @@ echo -e "\n${CYAN}--${RESET} Cloudbuilder ${CYAN}-------------------------------
    ${GRAY}Disk${RESET}       ${BOLD}$DISK_USED${RESET} ${GRAY}/${RESET} $DISK_TOTAL
    ${GRAY}Load${RESET}       ${BOLD}$LOAD${RESET}
    ${GRAY}Uptime${RESET}     $UPTIME${LAST_LINE}
-${CYAN}------------------------------------------------------------------------${RESET}
+${BLUE}$(printf '%*s' $LINE_WIDTH '' | tr ' ' '-')${RESET}
 "

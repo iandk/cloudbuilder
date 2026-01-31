@@ -268,6 +268,60 @@
             "update_packages": false,
             "ssh_password_auth": false,
             "ssh_root_login": false
+        },
+        "alpine-3-23": {
+            "image_url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/nocloud_alpine-3.23.3-x86_64-bios-cloudinit-r0.qcow2",
+            "min_size": "1G",
+            "uses": [
+                "shell",
+                "timezone",
+                "motd"
+            ],
+            "install_packages": [
+                "qemu-guest-agent",
+                "curl",
+                "wget",
+                "ca-certificates",
+                "chrony",
+                "htop",
+                "jq",
+                "bash",
+                "openresolv",
+                "nano",
+                "uuidgen",
+                "util-linux",
+                "openssh-server-pam",
+                "sudo",
+                "e2fsprogs",
+                "e2fsprogs-extra",
+                "lsblk",
+                "tzdata",
+                "cloud-utils-growpart",
+                "bash-completion"
+            ],
+            "update_packages": false,
+            "run_commands": [
+                "apk update && apk upgrade",
+                "rm -rf /var/cache/apk/*",
+                "sed -i 's/^TIMEOUT.*/TIMEOUT 10/' /boot/extlinux.conf || true",
+                "rc-update add cloud-init-local boot",
+                "rc-update add cloud-init default",
+                "rc-update add cloud-config default",
+                "rc-update add cloud-final default",
+                "rc-update add qemu-guest-agent default",
+                "rc-update add chronyd default",
+                "rc-update add sshd default",
+                "cat > /etc/network/if-up.d/resolv-conf << 'EOFSCRIPT'\n#!/bin/sh\n# Process dns-nameservers from /etc/network/interfaces (cloud-init compatibility)\n[ \"$PHASE\" != \"up\" ] && exit 0\nDNS=$(grep dns-nameservers /etc/network/interfaces 2>/dev/null | head -1 | sed 's/.*dns-nameservers//')\nSEARCH=$(grep dns-search /etc/network/interfaces 2>/dev/null | head -1 | sed 's/.*dns-search//')\n[ -z \"$DNS\" ] && exit 0\n{ [ -n \"$SEARCH\" ] && echo \"search$SEARCH\"; for ns in $DNS; do echo \"nameserver $ns\"; done; } > /etc/resolv.conf\nEOFSCRIPT",
+                "chmod +x /etc/network/if-up.d/resolv-conf",
+                "echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || rc-service qemu-guest-agent start' | crontab -",
+                "printf '%s\\n' 'net.ipv4.tcp_syncookies=1' 'net.ipv4.conf.all.accept_redirects=0' 'net.ipv4.conf.default.accept_redirects=0' 'net.ipv4.conf.all.send_redirects=0' 'net.ipv4.conf.all.accept_source_route=0' 'net.ipv4.conf.all.log_martians=1' 'net.ipv6.conf.all.accept_redirects=0' 'net.ipv6.conf.default.accept_redirects=0' 'net.core.rmem_max=16777216' 'net.core.wmem_max=16777216' 'net.core.netdev_max_backlog=30000' 'net.core.somaxconn=65535' 'vm.swappiness=10' 'net.ipv4.tcp_keepalive_time=600' 'net.ipv4.tcp_keepalive_intvl=60' 'net.ipv4.tcp_keepalive_probes=5' > /etc/sysctl.d/99-cloudbuilder.conf",
+                "rm -f /etc/ssh/ssh_host_*",
+                "rm -rf /var/lib/cloud/instance /var/lib/cloud/data 2>/dev/null || true",
+                "truncate -s 0 /etc/machine-id 2>/dev/null || true",
+                "rm -rf /var/cache/apk/* /tmp/* /var/tmp/*"
+            ],
+            "ssh_password_auth": false,
+            "ssh_root_login": false
         }
     }
 }
