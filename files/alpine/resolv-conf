@@ -1,0 +1,18 @@
+#!/bin/sh
+# Alpine cloud-init DNS resolver hook
+# Processes dns-nameservers from /etc/network/interfaces for cloud-init compatibility
+# Installed to: /etc/network/if-up.d/resolv-conf
+
+[ "$PHASE" != "up" ] && exit 0
+
+DNS=$(grep dns-nameservers /etc/network/interfaces 2>/dev/null | head -1 | sed 's/.*dns-nameservers//')
+SEARCH=$(grep dns-search /etc/network/interfaces 2>/dev/null | head -1 | sed 's/.*dns-search//')
+
+[ -z "$DNS" ] && exit 0
+
+{
+    [ -n "$SEARCH" ] && echo "search$SEARCH"
+    for ns in $DNS; do
+        echo "nameserver $ns"
+    done
+} > /etc/resolv.conf

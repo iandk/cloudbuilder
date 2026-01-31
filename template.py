@@ -5,6 +5,7 @@ import json
 import logging
 import lzma
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -28,8 +29,42 @@ from rich.progress import (
 console = Console()
 
 # Constants
-DOWNLOAD_TIMEOUT = 600  # 10 minutes timeout for downloads
-CUSTOMIZE_TIMEOUT = 600  # 10 minutes timeout for customization
+DOWNLOAD_TIMEOUT = 600   # 10 minutes timeout for downloads
+CUSTOMIZE_TIMEOUT = 1800  # 30 minutes timeout for customization (includes package updates + installs)
+
+# Proxmox VM naming rules
+PROXMOX_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*$')
+PROXMOX_NAME_MAX_LENGTH = 63
+
+
+def validate_template_name(name: str) -> None:
+    """
+    Validate template name against Proxmox VM naming rules.
+
+    Proxmox requires:
+    - Alphanumeric characters, hyphens, underscores, and periods only
+    - Cannot start with a hyphen
+    - Maximum 63 characters
+
+    Raises:
+        ValueError: If the name is invalid
+    """
+    if not name:
+        raise ValueError("Template name cannot be empty")
+
+    if len(name) > PROXMOX_NAME_MAX_LENGTH:
+        raise ValueError(
+            f"Template name '{name}' is too long ({len(name)} chars). "
+            f"Maximum is {PROXMOX_NAME_MAX_LENGTH} characters."
+        )
+
+    if not PROXMOX_NAME_PATTERN.match(name):
+        raise ValueError(
+            f"Template name '{name}' contains invalid characters. "
+            f"Only alphanumeric, hyphen, underscore, and period are allowed. "
+            f"Name cannot start with a hyphen."
+        )
+
 
 @dataclass
 class Template:
@@ -142,6 +177,9 @@ class TemplateManager:
 
             self.templates = {}
             for name, t in templates_config.items():
+                # Validate template name against Proxmox naming rules
+                validate_template_name(name)
+
                 # Resolve component references if using new format
                 if components or t.get("uses"):
                     t = self._resolve_template(name, t, components)
@@ -414,7 +452,13 @@ class TemplateManager:
                     elapsed = int(time.time() - start_time)
                     if elapsed >= CUSTOMIZE_TIMEOUT:
                         process.kill()
-                        raise TimeoutError(f"Customization timeout after {CUSTOMIZE_TIMEOUT} seconds")
+                        pkg_count = len(template.install_packages)
+                        cmd_count = len(template.run_commands)
+                        raise TimeoutError(
+                            f"Customization of '{template.name}' timed out after {CUSTOMIZE_TIMEOUT // 60} minutes "
+                            f"({pkg_count} packages, {cmd_count} commands). "
+                            f"Consider increasing CUSTOMIZE_TIMEOUT or reducing package list."
+                        )
                     time.sleep(1)
                 
                 stdout, stderr = process.communicate()

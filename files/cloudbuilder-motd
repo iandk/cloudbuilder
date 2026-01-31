@@ -10,9 +10,12 @@ if [ "$1" = "--install" ]; then
         chmod -x /etc/update-motd.d/* 2>/dev/null
         chmod +x /etc/update-motd.d/00-cloudbuilder
 
-        # Configure PAM to use dynamic motd
-        sed -i 's/^session.*pam_motd.so/#&/' /etc/pam.d/sshd
-        echo 'session    optional     pam_motd.so motd=/run/motd.dynamic' >> /etc/pam.d/sshd
+        # Configure PAM to use dynamic motd (idempotent)
+        PAM_LINE='session    optional     pam_motd.so motd=/run/motd.dynamic'
+        if ! grep -qF "$PAM_LINE" /etc/pam.d/sshd 2>/dev/null; then
+            sed -i 's/^session.*pam_motd.so/#&/' /etc/pam.d/sshd
+            echo "$PAM_LINE" >> /etc/pam.d/sshd
+        fi
 
         # Disable Ubuntu motd-news and remove default scripts
         systemctl disable motd-news.timer motd-news.service 2>/dev/null || true
