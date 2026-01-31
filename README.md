@@ -344,13 +344,15 @@ You can test built templates locally using QEMU without importing to Proxmox. Th
 
 ```bash
 # Set the template to test
-IMAGE_FILE="/var/lib/cloudbuilder/templates/debian-12.qcow2"
+IMAGE_FILE="/var/lib/cloudbuilder/templates/freebsd-15.qcow2"
 
 # Create cloud-init data
 mkdir -p /tmp/cidata
 echo "instance-id: test-$(date +%s)" > /tmp/cidata/meta-data
 cat > /tmp/cidata/user-data << 'EOF'
 #cloud-config
+hostname: freebsd-15
+user: root
 password: cloudbuilder
 chpasswd: {expire: False}
 ssh_pwauth: True
@@ -367,6 +369,7 @@ qemu-system-x86_64 -m 1024 \
 ```
 
 **Notes:**
+
 - Login with `root` / `cloudbuilder` (or the default cloud user for the distro)
 - Press `Ctrl+A` then `X` to exit QEMU
 - The image is modified during boot - use a copy if you want to preserve the original

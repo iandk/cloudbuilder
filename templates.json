@@ -112,6 +112,27 @@
             "ssh_password_auth": false,
             "ssh_root_login": false
         },
+        "fedora-43": {
+            "image_url": "https://ftp.fau.de/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "rhel-base",
+                "dnf-automatic",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "cronie",
+                "dnf5-plugin-automatic",
+                "htop"
+            ],
+            "update_packages": false,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
         "fedora-42": {
             "image_url": "https://ftp.fau.de/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2",
             "uses": [
@@ -127,8 +148,64 @@
             "install_packages": [
                 "cronie",
                 "dnf5-plugin-automatic",
-                "htop",
-                "bpytop"
+                "htop"
+            ],
+            "update_packages": false,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "rocky-10": {
+            "image_url": "https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-GenericCloud-Base-10.1-20251116.0.x86_64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "rhel-base",
+                "epel",
+                "dnf-automatic",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "dnf-automatic"
+            ],
+            "update_packages": false,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "centos-stream-10": {
+            "image_url": "https://cloud.centos.org/centos/10-stream/x86_64/images/CentOS-Stream-GenericCloud-x86_64-10-20260126.0.x86_64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "rhel-base",
+                "epel",
+                "dnf-automatic",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "dnf-automatic"
+            ],
+            "update_packages": false,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "opensuse-leap-16": {
+            "image_url": "https://download.opensuse.org/distribution/leap/16.0/appliances/Leap-16.0-Minimal-VM.x86_64-Cloud.qcow2",
+            "min_size": "5G",
+            "grow_partition": "3",
+            "uses": [
+                "qemu-agent-suse",
+                "system-suse",
+                "shell",
+                "timezone",
+                "opensuse-base",
+                "motd",
+                "finalize"
             ],
             "update_packages": false,
             "ssh_password_auth": false,
@@ -313,6 +390,55 @@
             },
             "run_commands": [
                 "chmod +x /etc/cloudbuilder-motd && /etc/cloudbuilder-motd --install"
+            ]
+        },
+        "qemu-agent-suse": {
+            "description": "QEMU guest agent with cron watchdog for SUSE",
+            "install_packages": [
+                "qemu-guest-agent",
+                "cronie"
+            ],
+            "run_commands": [
+                "systemctl enable qemu-guest-agent 2>/dev/null || true",
+                "systemctl enable crond 2>/dev/null || true",
+                "crontab -l 2>/dev/null | grep -qF 'qemu-ga' || (crontab -l 2>/dev/null; echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || systemctl start qemu-guest-agent') | crontab -"
+            ]
+        },
+        "system-suse": {
+            "description": "System hardening + common packages for SUSE",
+            "install_packages": [
+                "curl",
+                "git",
+                "wget",
+                "ca-certificates",
+                "traceroute",
+                "tcpdump",
+                "python3",
+                "jq",
+                "bash-completion"
+            ],
+            "copy_files": {
+                "files/sysctl.d/99-cloudbuilder.conf": "/etc/sysctl.d/"
+            },
+            "run_commands": [
+                "echo 'ACTION==\"add|change\", KERNEL==\"vd[a-z]\", ATTR{queue/scheduler}=\"none\"' > /etc/udev/rules.d/60-virtio-scheduler.rules",
+                "ln -sf /usr/lib/systemd/system/serial-getty@.service /etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service",
+                "mkdir -p /etc/systemd/journald.conf.d && printf '%s\\n' '[Journal]' 'SystemMaxUse=500M' 'RuntimeMaxUse=100M' > /etc/systemd/journald.conf.d/size-limit.conf"
+            ]
+        },
+        "opensuse-base": {
+            "description": "openSUSE packages + setup",
+            "install_packages": [
+                "vim",
+                "chrony",
+                "mtr",
+                "bind-utils",
+                "growpart",
+                "htop"
+            ],
+            "run_commands": [
+                "zypper -n update",
+                "systemctl enable chronyd"
             ]
         },
         "finalize": {

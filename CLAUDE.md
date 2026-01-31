@@ -48,15 +48,19 @@ Uses `virt-customize --copy-in`. Paths are resolved relative to the cloudbuilder
 
 ## Current Templates
 
-| Template     | Base Image      | Package Manager | MOTD Mechanism |
-| ------------ | --------------- | --------------- | -------------- |
-| alma-9       | AlmaLinux 9     | dnf             | profile.d      |
-| alma-10      | AlmaLinux 10    | dnf             | profile.d      |
-| debian-12    | Debian Bookworm | apt             | update-motd.d  |
-| debian-13    | Debian Trixie   | apt             | update-motd.d  |
-| ubuntu-24-04 | Ubuntu Noble    | apt             | update-motd.d  |
-| ubuntu-25-04 | Ubuntu Plucky   | apt             | update-motd.d  |
-| fedora-42    | Fedora 42       | dnf             | profile.d      |
+| Template         | Base Image        | Package Manager | MOTD Mechanism |
+| ---------------- | ----------------- | --------------- | -------------- |
+| alma-9           | AlmaLinux 9       | dnf             | profile.d      |
+| alma-10          | AlmaLinux 10      | dnf             | profile.d      |
+| rocky-10         | Rocky Linux 10    | dnf             | profile.d      |
+| centos-stream-10 | CentOS Stream 10  | dnf             | profile.d      |
+| debian-12        | Debian Bookworm   | apt             | update-motd.d  |
+| debian-13        | Debian Trixie     | apt             | update-motd.d  |
+| ubuntu-24-04     | Ubuntu Noble      | apt             | update-motd.d  |
+| ubuntu-25-04     | Ubuntu Plucky     | apt             | update-motd.d  |
+| fedora-42        | Fedora 42         | dnf             | profile.d      |
+| opensuse-leap-16 | openSUSE Leap 16  | zypper          | profile.d      |
+| alpine-3-23      | Alpine 3.23       | apk             | profile.d      |
 
 ---
 
@@ -72,15 +76,15 @@ See README.md for configuration options and examples. Key implementation notes:
 
 ## Distro-Specific Package Mapping
 
-| Function        | Debian/Ubuntu         | RHEL/Fedora            |
-| --------------- | --------------------- | ---------------------- |
-| DNS tools       | `dnsutils`            | `bind-utils`           |
-| MTR             | `mtr-tiny`            | `mtr`                  |
-| Vim             | `vim-tiny`            | `vim-minimal`          |
-| Auto updates    | `unattended-upgrades` | `dnf-automatic`        |
-| Disk grow       | `cloud-guest-utils`   | `cloud-utils-growpart` |
-| Time sync       | `systemd-timesyncd`   | `chrony`               |
-| Bash completion | `bash-completion`     | `bash-completion`      |
+| Function        | Debian/Ubuntu         | RHEL/Fedora            | openSUSE          |
+| --------------- | --------------------- | ---------------------- | ----------------- |
+| DNS tools       | `dnsutils`            | `bind-utils`           | `bind-utils`      |
+| MTR             | `mtr-tiny`            | `mtr`                  | `mtr`             |
+| Vim             | `vim-tiny`            | `vim-minimal`          | `vim`             |
+| Auto updates    | `unattended-upgrades` | `dnf-automatic`        | (manual zypper)   |
+| Disk grow       | `cloud-guest-utils`   | `cloud-utils-growpart` | `growpart`        |
+| Time sync       | `systemd-timesyncd`   | `chrony`               | `chrony`          |
+| Bash completion | `bash-completion`     | `bash-completion`      | `bash-completion` |
 
 ---
 

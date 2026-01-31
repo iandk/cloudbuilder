@@ -77,7 +77,11 @@ class Template:
     ssh_password_auth: bool
     ssh_root_login: bool
     min_size: Optional[str] = None  # Minimum disk size (e.g., "1G", "500M")
+    grow_partition: Optional[str] = None  # Partition number to grow after resize (e.g., "3" for /dev/sda3)
     copy_files: Optional[Dict[str, str]] = None  # Local path -> destination path mapping
+    mount: Optional[str] = None  # Filesystem to mount (e.g., "/dev/sda5" for FreeBSD UFS)
+    firstboot: bool = False  # Use firstboot scripts instead of run_commands (for FreeBSD, etc.)
+    skip_customization: bool = False  # Skip virt-customize entirely (for unsupported OS like FreeBSD)
     build_date: Optional[str] = None
     last_update: Optional[str] = None
     vmid: Optional[int] = None
@@ -143,7 +147,7 @@ class TemplateManager:
             resolved["copy_files"].update(template_config["copy_files"])
 
         # Copy non-mergeable fields directly from template
-        for key in ["image_url", "update_packages", "ssh_password_auth", "ssh_root_login", "min_size"]:
+        for key in ["image_url", "update_packages", "ssh_password_auth", "ssh_root_login", "min_size", "grow_partition", "mount", "firstboot", "skip_customization"]:
             if key in template_config:
                 resolved[key] = template_config[key]
 
@@ -193,7 +197,11 @@ class TemplateManager:
                     ssh_password_auth=t.get("ssh_password_auth", False),
                     ssh_root_login=t.get("ssh_root_login", False),
                     min_size=t.get("min_size"),
-                    copy_files=t.get("copy_files") if t.get("copy_files") else None
+                    grow_partition=t.get("grow_partition"),
+                    copy_files=t.get("copy_files") if t.get("copy_files") else None,
+                    mount=t.get("mount"),
+                    firstboot=t.get("firstboot", False),
+                    skip_customization=t.get("skip_customization", False)
                 )
 
                 # Load metadata if available
@@ -346,6 +354,29 @@ class TemplateManager:
                     check=True
                 )
                 self.logger.info(f"Successfully resized {template.name} to {template.min_size}")
+
+                # If grow_partition is specified, grow the partition and filesystem
+                if template.grow_partition:
+                    self.logger.info(f"Growing partition {template.grow_partition} in {template.name}")
+                    part_num = template.grow_partition
+                    # Build growpart command that tries both sda and vda
+                    grow_cmd = f"growpart /dev/sda {part_num} || growpart /dev/vda {part_num} || echo 'growpart done'"
+                    # Build filesystem resize command (try xfs first, then ext4)
+                    resize_cmd = f"xfs_growfs / || resize2fs /dev/sda{part_num} || resize2fs /dev/vda{part_num} || echo 'resize done'"
+
+                    try:
+                        subprocess.run(
+                            ["virt-customize", "-a", str(image_path),
+                             "--run-command", grow_cmd,
+                             "--run-command", resize_cmd],
+                            capture_output=True,
+                            text=True,
+                            check=True
+                        )
+                        self.logger.info(f"Successfully grew partition {part_num} in {template.name}")
+                    except subprocess.CalledProcessError as e:
+                        # Log but don't fail - growpart might already be at max or filesystem type differs
+                        self.logger.warning(f"Partition grow returned non-zero (may be OK): {e.stderr}")
             else:
                 self.logger.debug(
                     f"{template.name} already meets min_size ({current_size / (1024*1024*1024):.2f}G >= {template.min_size})"
@@ -357,8 +388,149 @@ class TemplateManager:
             self.logger.error(f"Failed to resize image for {template.name}: {e}")
             raise
 
+    def _customize_with_guestfish(self, template: Template, image_path: Path, update_mode: bool = False) -> None:
+        """Customize image using guestfish for systems requiring explicit mount (e.g., FreeBSD)."""
+        import tempfile
+
+        self.logger.info(f"Using guestfish for {template.name} (mount: {template.mount})")
+
+        # Build firstboot script with all commands (packages + run_commands)
+        firstboot_commands = []
+
+        # Package installation (FreeBSD uses pkg)
+        if template.install_packages:
+            pkg_list = " ".join(template.install_packages)
+            firstboot_commands.append(f"pkg install -y {pkg_list}")
+
+        # Add run_commands
+        firstboot_commands.extend(template.run_commands)
+
+        # SSH settings
+        if template.ssh_password_auth:
+            firstboot_commands.append(
+                "sed -i '' 's/^#*PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
+            )
+        if template.ssh_root_login:
+            firstboot_commands.append(
+                "sed -i '' 's/^#*PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config"
+            )
+
+        # Build guestfish script
+        gf_commands = [
+            f"add {image_path}",
+            "run",
+            f"mount {template.mount} /",
+        ]
+
+        # Copy files
+        config_dir = Path(self.config_path).parent
+        if template.copy_files:
+            for local_path, dest_path in template.copy_files.items():
+                source_path = Path(local_path)
+                if not source_path.is_absolute():
+                    source_path = config_dir / source_path
+                source_path = source_path.resolve()
+
+                if not source_path.exists():
+                    raise FileNotFoundError(f"Copy source file not found: {source_path}")
+
+                # Remove trailing slash for guestfish copy-in
+                dest_dir = dest_path.rstrip('/')
+                gf_commands.append(f"copy-in {source_path} {dest_dir}")
+                self.logger.debug(f"Will copy {source_path} to {dest_dir}")
+
+        # Create firstboot script if there are commands to run
+        if firstboot_commands:
+            # Create temp firstboot script
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                f.write("#!/bin/sh\n")
+                f.write("# Cloudbuilder firstboot script - runs once then self-deletes\n")
+                f.write("set -e\n\n")
+                for cmd in firstboot_commands:
+                    f.write(f"{cmd}\n")
+                f.write("\n# Self-delete\n")
+                f.write("rm -f /usr/local/etc/rc.d/cloudbuilder_firstboot\n")
+                firstboot_script = f.name
+
+            # FreeBSD rc.d script wrapper
+            with tempfile.NamedTemporaryFile(mode='w', suffix='_rc', delete=False) as f:
+                f.write("#!/bin/sh\n")
+                f.write("# PROVIDE: cloudbuilder_firstboot\n")
+                f.write("# REQUIRE: NETWORKING\n")
+                f.write("# BEFORE: LOGIN\n")
+                f.write(". /etc/rc.subr\n")
+                f.write("name=\"cloudbuilder_firstboot\"\n")
+                f.write("start_cmd=\"/usr/local/etc/cloudbuilder-firstboot.sh\"\n")
+                f.write("stop_cmd=\":\"\n")
+                f.write("rcvar=\"\"\n")
+                f.write("run_rc_command \"$1\"\n")
+                rc_script = f.name
+
+            gf_commands.append("mkdir-p /usr/local/etc/rc.d")
+            gf_commands.append(f"copy-in {firstboot_script} /usr/local/etc")
+            gf_commands.append("mv /usr/local/etc/" + Path(firstboot_script).name + " /usr/local/etc/cloudbuilder-firstboot.sh")
+            gf_commands.append("chmod 0755 /usr/local/etc/cloudbuilder-firstboot.sh")
+            gf_commands.append(f"copy-in {rc_script} /usr/local/etc/rc.d")
+            gf_commands.append("mv /usr/local/etc/rc.d/" + Path(rc_script).name + " /usr/local/etc/rc.d/cloudbuilder_firstboot")
+            gf_commands.append("chmod 0755 /usr/local/etc/rc.d/cloudbuilder_firstboot")
+
+        gf_commands.append("umount-all")
+
+        # Run guestfish
+        gf_script = "\n".join(gf_commands)
+        self.logger.debug(f"Guestfish script:\n{gf_script}")
+
+        process = None
+        try:
+            with console.status(f"Customizing {template.name} (guestfish)", spinner="dots"):
+                process = subprocess.Popen(
+                    ["guestfish"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+
+                stdout, stderr = process.communicate(input=gf_script, timeout=CUSTOMIZE_TIMEOUT)
+
+                if process.returncode != 0:
+                    error_msg = f"guestfish failed with code {process.returncode}: {stderr}"
+                    self.logger.error(error_msg)
+                    raise RuntimeError(error_msg)
+
+            # Cleanup temp files
+            if firstboot_commands:
+                Path(firstboot_script).unlink(missing_ok=True)
+                Path(rc_script).unlink(missing_ok=True)
+
+            # Update build info
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if update_mode and template.build_date:
+                template.last_update = current_time
+            else:
+                template.build_date = current_time
+                template.last_update = None
+
+        except subprocess.TimeoutExpired:
+            if process:
+                process.kill()
+            raise TimeoutError(f"guestfish customization timed out after {CUSTOMIZE_TIMEOUT // 60} minutes")
+        except Exception as e:
+            self.logger.error(f"Failed to customize image with guestfish: {str(e)}")
+            if process and process.poll() is None:
+                process.kill()
+            raise
+
     def customize_image(self, template: Template, image_path: Path, update_mode: bool = False) -> None:
         """Customize the image using virt-customize with a simple status indicator."""
+
+        # Skip customization entirely for unsupported OS (e.g., FreeBSD)
+        if template.skip_customization:
+            self.logger.info(f"Skipping customization for {template.name} (skip_customization=true)")
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            template.build_date = current_time
+            template.last_update = None
+            return
 
         # Check if there's anything to customize
         has_work = (
@@ -381,7 +553,13 @@ class TemplateManager:
 
         self.logger.info(f"Customizing image for {template.name}")
 
+        # Use guestfish for images requiring explicit mount (e.g., FreeBSD)
+        if template.mount:
+            self._customize_with_guestfish(template, image_path, update_mode)
+            return
+
         commands = []
+
         if template.update_packages or update_mode:
             commands.extend(["--update"])
 

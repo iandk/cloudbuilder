@@ -6,6 +6,41 @@
 
 ## 2025-01-31
 
+### New Feature: `grow_partition` for min_size images
+
+**Added automatic partition growth when disk is resized**
+
+- New `grow_partition` field in templates.json specifies which partition to grow (e.g., "3" for /dev/sda3)
+- When `min_size` triggers a disk resize, `grow_partition` runs growpart + filesystem resize BEFORE package installation
+- Solves the issue where minimal images (like openSUSE Leap) run out of space during package installation
+- Uses virt-customize to run growpart and xfs_growfs/resize2fs inside the image
+
+**Removed `bpytop` from Fedora and openSUSE templates** - package no longer available in repos
+
+Files affected: `template.py`, `templates.json`
+
+---
+
+### New Templates: Rocky Linux, CentOS Stream, openSUSE Leap
+
+**Added three new distribution templates**
+
+- **rocky-10**: Rocky Linux 10 (RHEL-compatible, drop-in AlmaLinux alternative)
+- **centos-stream-10**: CentOS Stream 10 (RHEL upstream)
+- **opensuse-leap-16**: openSUSE Leap 16.0 (first SUSE-family template)
+
+**New components for openSUSE support**
+
+- `qemu-agent-suse`: QEMU guest agent with cronie for cron watchdog
+- `system-suse`: System hardening + common packages using zypper
+- `opensuse-base`: openSUSE packages (vim, chrony, mtr, bind-utils, growpart, htop, bpytop)
+
+Rocky and CentOS Stream use existing RHEL components (`rhel-base`, `epel`, `dnf-automatic`).
+
+Files affected: `templates.json`
+
+---
+
 ### Documentation: Local Template Testing
 
 **Added QEMU testing instructions to README.md**
