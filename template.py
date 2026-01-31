@@ -76,12 +76,50 @@ class TemplateManager:
             disable=False
         )
 
+    def _resolve_template(self, name: str, template_config: dict, components: dict) -> dict:
+        """
+        Resolve component references and merge into final template config.
+
+        Components are applied in order, then template's own values are appended.
+        - install_packages: concatenated in order
+        - run_commands: concatenated in order
+        - copy_files: merged (later values override earlier)
+        """
+        resolved = {
+            "install_packages": [],
+            "run_commands": [],
+            "copy_files": {}
+        }
+
+        # Apply components in order
+        for comp_name in template_config.get("uses", []):
+            if comp_name not in components:
+                raise ValueError(f"Template '{name}' references unknown component '{comp_name}'")
+            comp = components[comp_name]
+            resolved["install_packages"].extend(comp.get("install_packages", []))
+            resolved["run_commands"].extend(comp.get("run_commands", []))
+            if comp.get("copy_files"):
+                resolved["copy_files"].update(comp["copy_files"])
+
+        # Apply template's own values (appended after components)
+        resolved["install_packages"].extend(template_config.get("install_packages", []))
+        resolved["run_commands"].extend(template_config.get("run_commands", []))
+        if template_config.get("copy_files"):
+            resolved["copy_files"].update(template_config["copy_files"])
+
+        # Copy non-mergeable fields directly from template
+        for key in ["image_url", "update_packages", "ssh_password_auth", "ssh_root_login", "min_size"]:
+            if key in template_config:
+                resolved[key] = template_config[key]
+
+        return resolved
+
     def load_templates(self) -> None:
         """Load templates from configuration file and metadata."""
         try:
             with open(self.config_path) as f:
                 config = json.load(f)
-            
+
             # Load existing metadata if available
             metadata = {}
             if self.metadata_file.exists():
@@ -90,9 +128,24 @@ class TemplateManager:
                         metadata = json.load(f)
                 except json.JSONDecodeError:
                     self.logger.warning(f"Metadata file corrupt, ignoring: {self.metadata_file}")
-            
+
+            # Detect config format: new (with components/templates) or legacy (flat)
+            if "components" in config and "templates" in config:
+                # New format with components
+                components = config["components"]
+                templates_config = config["templates"]
+                self.logger.debug(f"Using component-based config with {len(components)} components")
+            else:
+                # Legacy flat format - no components to resolve
+                components = {}
+                templates_config = config
+
             self.templates = {}
-            for name, t in config.items():
+            for name, t in templates_config.items():
+                # Resolve component references if using new format
+                if components or t.get("uses"):
+                    t = self._resolve_template(name, t, components)
+
                 template = Template(
                     name=name,
                     image_url=t["image_url"],
@@ -102,19 +155,19 @@ class TemplateManager:
                     ssh_password_auth=t.get("ssh_password_auth", False),
                     ssh_root_login=t.get("ssh_root_login", False),
                     min_size=t.get("min_size"),
-                    copy_files=t.get("copy_files")
+                    copy_files=t.get("copy_files") if t.get("copy_files") else None
                 )
-                
+
                 # Load metadata if available
                 if name in metadata:
                     template.build_date = metadata[name].get("build_date")
                     template.last_update = metadata[name].get("last_update")
                     template.vmid = metadata[name].get("vmid")
-                
+
                 self.templates[name] = template
-                
+
             self.logger.info(f"Loaded {len(self.templates)} templates from {self.config_path}")
-            
+
         except (json.JSONDecodeError, FileNotFoundError) as e:
             self.logger.error(f"Failed to load templates: {e}")
             raise
@@ -500,9 +553,10 @@ class TemplateManager:
             if name in proxmox_templates:
                 actual_vmid = proxmox_templates[name]
                 if template.vmid != actual_vmid:
-                    self.logger.warning(
-                        f"Template {name} has incorrect VMID in metadata: {template.vmid} vs actual {actual_vmid}"
-                    )
+                    if template.vmid is not None:
+                        self.logger.warning(
+                            f"Template {name} has incorrect VMID in metadata: {template.vmid} vs actual {actual_vmid}"
+                        )
                     template.vmid = actual_vmid
             # If template doesn't exist in Proxmox but has a VMID in metadata
             elif template.vmid is not None:

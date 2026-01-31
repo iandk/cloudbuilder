@@ -1,128 +1,327 @@
 {
-    "alma-9": {
-        "image_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -",
-            "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
+    "components": {
+        "system": {
+            "description": "System hardening + common packages",
+            "install_packages": [
+                "curl",
+                "git",
+                "wget",
+                "ca-certificates",
+                "traceroute",
+                "tcpdump",
+                "python3",
+                "jq",
+                "bash-completion"
+            ],
+            "copy_files": {
+                "files/sysctl.d/99-cloudbuilder.conf": "/etc/sysctl.d/"
+            },
+            "run_commands": [
+                "echo 'ACTION==\"add|change\", KERNEL==\"vd[a-z]\", ATTR{queue/scheduler}=\"none\"' > /etc/udev/rules.d/60-virtio-scheduler.rules",
+                "ln -sf /usr/lib/systemd/system/serial-getty@.service /etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service",
+                "mkdir -p /etc/systemd/journald.conf.d && printf '%s\\n' '[Journal]' 'SystemMaxUse=500M' 'RuntimeMaxUse=100M' > /etc/systemd/journald.conf.d/size-limit.conf"
+            ]
+        },
+        "shell": {
+            "description": "Shell customization: aliases, colors, prompt, history",
+            "copy_files": {
+                "files/profile.d/shell.sh": "/etc/profile.d/"
+            }
+        },
+        "qemu-agent": {
+            "description": "QEMU guest agent with cron watchdog",
+            "install_packages": [
+                "qemu-guest-agent"
+            ],
+            "run_commands": [
+                "systemctl enable qemu-guest-agent 2>/dev/null || true",
+                "(crontab -l 2>/dev/null; echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || systemctl start qemu-guest-agent') | crontab -"
+            ]
+        },
+        "timezone": {
+            "description": "Set timezone to Europe/Berlin",
+            "run_commands": [
+                "ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime && echo 'Europe/Berlin' > /etc/timezone"
+            ]
+        },
+        "rhel-base": {
+            "description": "RHEL/Fedora packages + setup",
+            "install_packages": [
+                "vim-minimal",
+                "chrony",
+                "mtr",
+                "bind-utils",
+                "cloud-utils-growpart"
+            ],
+            "run_commands": [
+                "dnf -y upgrade",
+                "sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
+                "systemctl enable chronyd",
+                "sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
+            ]
+        },
+        "debian-base": {
+            "description": "Debian/Ubuntu packages + setup",
+            "install_packages": [
+                "cron",
+                "vim-tiny",
+                "mtr-tiny",
+                "dnsutils",
+                "cloud-guest-utils",
+                "htop",
+                "bpytop"
+            ],
+            "run_commands": [
+                "apt-get update && apt-get -y dist-upgrade",
+                "systemctl enable systemd-timesyncd"
+            ]
+        },
+        "unattended-upgrades": {
+            "description": "Debian/Ubuntu automatic security updates",
+            "install_packages": [
+                "unattended-upgrades"
+            ],
+            "run_commands": [
+                "echo 'Unattended-Upgrade::Automatic-Reboot \"false\";' > /etc/apt/apt.conf.d/51no-auto-reboot",
+                "echo 'unattended-upgrades unattended-upgrades/enable_auto_updates boolean true' | debconf-set-selections",
+                "dpkg-reconfigure -f noninteractive unattended-upgrades"
+            ]
+        },
+        "epel": {
+            "description": "EPEL repository + htop/bpytop for RHEL-based distros",
+            "run_commands": [
+                "command -v crb >/dev/null 2>&1 && crb enable || true",
+                "rpm -q epel-release >/dev/null 2>&1 || dnf install -y epel-release || dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm || echo 'EPEL installation failed'",
+                "dnf -y makecache",
+                "dnf install -y htop bpytop || echo 'htop/bpytop installation skipped'"
+            ]
+        },
+        "dnf-automatic": {
+            "description": "RHEL/Fedora automatic security updates (handles both dnf and dnf5)",
+            "run_commands": [
+                "test -f /etc/dnf/automatic.conf && sed -i 's/^apply_updates = no/apply_updates = yes/' /etc/dnf/automatic.conf || true",
+                "test -f /etc/dnf/automatic.conf && sed -i 's/^upgrade_type = default/upgrade_type = security/' /etc/dnf/automatic.conf || true",
+                "test -f /etc/dnf/dnf5-plugins/automatic.conf && sed -i 's/^apply_updates = no/apply_updates = yes/' /etc/dnf/dnf5-plugins/automatic.conf || true",
+                "test -f /etc/dnf/dnf5-plugins/automatic.conf && sed -i 's/^upgrade_type = default/upgrade_type = security/' /etc/dnf/dnf5-plugins/automatic.conf || true",
+                "systemctl enable dnf-automatic.timer 2>/dev/null || systemctl enable dnf5-automatic.timer 2>/dev/null || true"
+            ]
+        },
+        "locale": {
+            "description": "Configure en_US.UTF-8 locale (Debian only, Ubuntu has it pre-configured)",
+            "run_commands": [
+                "sed -i 's/^# *\\(en_US\\.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen",
+                "locale-gen",
+                "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
+            ]
+        },
+        "motd": {
+            "description": "Cloudbuilder MOTD - self-installing script",
+            "copy_files": {
+                "files/cloudbuilder-motd": "/etc/"
+            },
+            "run_commands": [
+                "chmod +x /etc/cloudbuilder-motd && /etc/cloudbuilder-motd --install"
+            ]
+        },
+        "finalize": {
+            "description": "Final cleanup: SSH keys, cloud-init, machine-id",
+            "run_commands": [
+                "rm -f /etc/ssh/ssh_host_* /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
+                "systemctl enable sshd-keygen.target 2>/dev/null || true",
+                "systemctl enable sshd 2>/dev/null || systemctl enable ssh 2>/dev/null || true",
+                "rm -rf /var/lib/cloud/instance /var/lib/cloud/data",
+                "truncate -s 0 /etc/machine-id"
+            ]
+        }
     },
-    "alma-10": {
-        "image_url": "https://raw.repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-latest.x86_64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "command -v crb >/dev/null 2>&1 && sudo crb enable || (sudo dnf -y install dnf-plugins-core && sudo dnf config-manager --set-enabled crb)",
-            "sudo dnf install -y epel-release || sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm",
-            "sudo dnf -y makecache",
-            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config",
-            "sudo systemctl enable qemu-guest-agent || sudo ln -sf /usr/lib/systemd/system/qemu-guest-agent.service /etc/systemd/system/multi-user.target.wants/qemu-guest-agent.service",
-            "sudo rm -f /etc/ssh/ssh_host_*",
-            "sudo systemctl enable sshd-keygen.target",
-            "sudo systemctl enable sshd",
-            "(crontab -l 2>/dev/null; echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || systemctl start qemu-guest-agent') | crontab -",
-            "sudo sed -i 's/\\(FILTER_RPC_ARGS=\"--allow-rpcs=.*\\)\"/\\1,guest-exec,guest-exec-status\"/' /etc/sysconfig/qemu-ga"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
-    "debian-12": {
-        "image_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "curl",
-            "git",
-            "cron"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "(crontab -l ; echo \"*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent\") | crontab -",
-            "sed -i 's/^# *\\(en_US\\.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen",
-            "locale-gen",
-            "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
-    "debian-13": {
-        "image_url": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "curl",
-            "git",
-            "cron"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "(crontab -l ; echo \"*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent\") | crontab -",
-            "sed -i 's/^# *\\(en_US\\.UTF-8 UTF-8\\)/\\1/' /etc/locale.gen",
-            "locale-gen",
-            "update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
-    "ubuntu-24-04": {
-        "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
-        "install_packages": [
-            "qemu-guest-agent",
-            "resolvconf",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "systemctl enable qemu-guest-agent",
-            "systemctl start qemu-guest-agent",
-            "rm -f /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
-    "ubuntu-25-04": {
-        "image_url": "https://cloud-images.ubuntu.com/plucky/current/plucky-server-cloudimg-amd64.img",
-        "install_packages": [
-            "qemu-guest-agent",
-            "resolvconf",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "systemctl enable qemu-guest-agent",
-            "systemctl start qemu-guest-agent",
-            "rm -f /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
-            "(crontab -l ; echo '*/1 * * * * pgrep -f qemu-ga > /dev/null || systemctl start qemu-guest-agent') | crontab -"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    },
-    "fedora-42": {
-        "image_url": "https://ftp.fau.de/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "resolvconf",
-            "curl",
-            "git"
-        ],
-        "update_packages": true,
-        "run_commands": [
-            "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
+    "templates": {
+        "alma-9": {
+            "image_url": "https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "rhel-base",
+                "epel",
+                "dnf-automatic",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "dnf-automatic"
+            ],
+            "update_packages": false,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "alma-10": {
+            "image_url": "https://raw.repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-latest.x86_64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "rhel-base",
+                "epel",
+                "dnf-automatic",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "dnf-automatic"
+            ],
+            "update_packages": false,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "debian-12": {
+            "image_url": "https://cdimage.debian.org/cdimage/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "debian-base",
+                "unattended-upgrades",
+                "locale",
+                "motd",
+                "finalize"
+            ],
+            "update_packages": true,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "debian-13": {
+            "image_url": "https://cdimage.debian.org/cdimage/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "debian-base",
+                "unattended-upgrades",
+                "locale",
+                "motd",
+                "finalize"
+            ],
+            "update_packages": true,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "ubuntu-24-04": {
+            "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "debian-base",
+                "unattended-upgrades",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "resolvconf"
+            ],
+            "update_packages": true,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "ubuntu-25-04": {
+            "image_url": "https://cloud-images.ubuntu.com/plucky/current/plucky-server-cloudimg-amd64.img",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "debian-base",
+                "unattended-upgrades",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "resolvconf"
+            ],
+            "update_packages": true,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "fedora-42": {
+            "image_url": "https://ftp.fau.de/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "rhel-base",
+                "dnf-automatic",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "cronie",
+                "dnf5-plugin-automatic",
+                "htop",
+                "bpytop"
+            ],
+            "update_packages": false,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        },
+        "alpine-3-23": {
+            "image_url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/nocloud_alpine-3.23.3-x86_64-bios-cloudinit-r0.qcow2",
+            "min_size": "1G",
+            "uses": [
+                "shell",
+                "timezone",
+                "motd"
+            ],
+            "install_packages": [
+                "qemu-guest-agent",
+                "curl",
+                "wget",
+                "ca-certificates",
+                "chrony",
+                "htop",
+                "jq",
+                "bash",
+                "openresolv",
+                "nano",
+                "uuidgen",
+                "util-linux",
+                "openssh-server-pam",
+                "sudo",
+                "e2fsprogs",
+                "e2fsprogs-extra",
+                "lsblk",
+                "tzdata",
+                "cloud-utils-growpart",
+                "bash-completion"
+            ],
+            "update_packages": false,
+            "run_commands": [
+                "apk update && apk upgrade",
+                "rm -rf /var/cache/apk/*",
+                "sed -i 's/^TIMEOUT.*/TIMEOUT 10/' /boot/extlinux.conf || true",
+                "rc-update add cloud-init-local boot",
+                "rc-update add cloud-init default",
+                "rc-update add cloud-config default",
+                "rc-update add cloud-final default",
+                "rc-update add qemu-guest-agent default",
+                "rc-update add chronyd default",
+                "rc-update add sshd default",
+                "cat > /etc/network/if-up.d/resolv-conf << 'EOFSCRIPT'\n#!/bin/sh\n# Process dns-nameservers from /etc/network/interfaces (cloud-init compatibility)\n[ \"$PHASE\" != \"up\" ] && exit 0\nDNS=$(grep dns-nameservers /etc/network/interfaces 2>/dev/null | head -1 | sed 's/.*dns-nameservers//')\nSEARCH=$(grep dns-search /etc/network/interfaces 2>/dev/null | head -1 | sed 's/.*dns-search//')\n[ -z \"$DNS\" ] && exit 0\n{ [ -n \"$SEARCH\" ] && echo \"search$SEARCH\"; for ns in $DNS; do echo \"nameserver $ns\"; done; } > /etc/resolv.conf\nEOFSCRIPT",
+                "chmod +x /etc/network/if-up.d/resolv-conf",
+                "echo '*/1 * * * * pgrep -f qemu-ga >/dev/null || rc-service qemu-guest-agent start' | crontab -",
+                "printf '%s\\n' 'net.ipv4.tcp_syncookies=1' 'net.ipv4.conf.all.accept_redirects=0' 'net.ipv4.conf.default.accept_redirects=0' 'net.ipv4.conf.all.send_redirects=0' 'net.ipv4.conf.all.accept_source_route=0' 'net.ipv4.conf.all.log_martians=1' 'net.ipv6.conf.all.accept_redirects=0' 'net.ipv6.conf.default.accept_redirects=0' 'net.core.rmem_max=16777216' 'net.core.wmem_max=16777216' 'net.core.netdev_max_backlog=30000' 'net.core.somaxconn=65535' 'vm.swappiness=10' 'net.ipv4.tcp_keepalive_time=600' 'net.ipv4.tcp_keepalive_intvl=60' 'net.ipv4.tcp_keepalive_probes=5' > /etc/sysctl.d/99-cloudbuilder.conf",
+                "rm -f /etc/ssh/ssh_host_*",
+                "rm -rf /var/lib/cloud/instance /var/lib/cloud/data 2>/dev/null || true",
+                "truncate -s 0 /etc/machine-id 2>/dev/null || true",
+                "rm -rf /var/cache/apk/* /tmp/* /var/tmp/*"
+            ],
+            "ssh_password_auth": false,
+            "ssh_root_login": false
+        }
     }
 }

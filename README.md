@@ -1,6 +1,6 @@
-# CloudBuilder
+# Cloudbuilder
 
-CloudBuilder is a tool for managing VM templates in Proxmox. It automates downloading cloud OS images, customizing them, and importing them as Proxmox VM templates.
+Cloudbuilder is a tool for managing VM templates in Proxmox. It automates downloading cloud OS images, customizing them, and importing them as Proxmox VM templates.
 
 ## Features
 
@@ -22,6 +22,7 @@ CloudBuilder is a tool for managing VM templates in Proxmox. It automates downlo
 - libguestfs-tools (for virt-customize)
 
 **For Proxmox integration (optional):**
+
 - Proxmox VE 6.0+
 - Proxmox CLI tools (qm, pvesh)
 
@@ -50,25 +51,21 @@ Create a `templates.json` file in the current directory:
 
 ```json
 {
-    "debian-12": {
-        "image_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
-        "install_packages": [
-            "qemu-guest-agent",
-            "curl",
-            "git"
-        ],
-        "update_packages": false,
-        "run_commands": [
-            "apt-get update && apt-get -y dist-upgrade",
-            "systemctl enable qemu-guest-agent",
-            "rm -f /etc/ssh/ssh_host_*",
-            "systemctl enable ssh",
-            "rm -rf /var/lib/cloud/instance /var/lib/cloud/data",
-            "truncate -s 0 /etc/machine-id"
-        ],
-        "ssh_password_auth": false,
-        "ssh_root_login": false
-    }
+  "debian-12": {
+    "image_url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
+    "install_packages": ["qemu-guest-agent", "curl", "git"],
+    "update_packages": false,
+    "run_commands": [
+      "apt-get update && apt-get -y dist-upgrade",
+      "systemctl enable qemu-guest-agent",
+      "rm -f /etc/ssh/ssh_host_*",
+      "systemctl enable ssh",
+      "rm -rf /var/lib/cloud/instance /var/lib/cloud/data",
+      "truncate -s 0 /etc/machine-id"
+    ],
+    "ssh_password_auth": false,
+    "ssh_root_login": false
+  }
 }
 ```
 
@@ -78,18 +75,18 @@ Use `copy_files` to embed files into the template image. Files are copied after 
 
 ```json
 {
-    "my-template": {
-        "image_url": "https://example.com/image.qcow2",
-        "install_packages": ["nginx"],
-        "copy_files": {
-            "files/nginx.conf": "/etc/nginx/",
-            "files/scripts/setup.sh": "/usr/local/bin/"
-        },
-        "run_commands": [
-            "chmod +x /usr/local/bin/setup.sh",
-            "/usr/local/bin/setup.sh"
-        ]
-    }
+  "my-template": {
+    "image_url": "https://example.com/image.qcow2",
+    "install_packages": ["nginx"],
+    "copy_files": {
+      "files/nginx.conf": "/etc/nginx/",
+      "files/scripts/setup.sh": "/usr/local/bin/"
+    },
+    "run_commands": [
+      "chmod +x /usr/local/bin/setup.sh",
+      "/usr/local/bin/setup.sh"
+    ]
+  }
 }
 ```
 
@@ -101,17 +98,18 @@ Use `copy_files` to embed files into the template image. Files are copied after 
 
 ### Template Configuration Options
 
-| Option | Description |
-|--------|-------------|
-| `image_url` | URL to download the cloud image |
-| `install_packages` | List of packages to install |
-| `update_packages` | Whether to update packages via virt-customize (recommend `false`, do manual upgrade in run_commands instead) |
-| `copy_files` | Object mapping local file paths to destination directories in the image |
-| `run_commands` | Custom commands to run during customization |
-| `ssh_password_auth` | Enable password authentication for SSH |
-| `ssh_root_login` | Allow root login via SSH |
+| Option              | Description                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `image_url`         | URL to download the cloud image                                                                              |
+| `install_packages`  | List of packages to install                                                                                  |
+| `update_packages`   | Whether to update packages via virt-customize (recommend `false`, do manual upgrade in run_commands instead) |
+| `copy_files`        | Object mapping local file paths to destination directories in the image                                      |
+| `run_commands`      | Custom commands to run during customization                                                                  |
+| `ssh_password_auth` | Enable password authentication for SSH                                                                       |
+| `ssh_root_login`    | Allow root login via SSH                                                                                     |
 
 **Note**: For reliable builds, set `update_packages: false` and add the upgrade command as the first entry in `run_commands`:
+
 - Debian/Ubuntu: `apt-get update && apt-get -y dist-upgrade`
 - RHEL/Fedora: `sudo dnf -y upgrade`
 
@@ -144,7 +142,7 @@ Use `copy_files` to embed files into the template image. Files are copied after 
 
 ### Standalone Mode
 
-CloudBuilder can run on systems without Proxmox VE installed. It automatically detects the environment and adjusts behavior accordingly.
+Cloudbuilder can run on systems without Proxmox VE installed. It automatically detects the environment and adjusts behavior accordingly.
 
 ```bash
 # On a non-Proxmox system, standalone mode is automatic
@@ -161,6 +159,7 @@ CloudBuilder can run on systems without Proxmox VE installed. It automatically d
 ```
 
 In standalone mode:
+
 - Templates are downloaded and customized locally
 - Images are saved to the template directory as qcow2 files
 - No Proxmox CLI tools (pvesh, qm) are required
@@ -218,11 +217,11 @@ Import templates from pre-built qcow2/img files without going through the custom
 
 **Manifest fields:**
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `source` | Yes | Filename, relative path, or full URL to the qcow2/img file. Relative sources are resolved against the manifest URL when importing from HTTP. |
-| `vmid` | No | Specific VMID to assign (auto-assigns if omitted) |
-| `customize` | No | Run virt-customize using config from templates.json (default: false) |
+| Field       | Required | Description                                                                                                                                  |
+| ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source`    | Yes      | Filename, relative path, or full URL to the qcow2/img file. Relative sources are resolved against the manifest URL when importing from HTTP. |
+| `vmid`      | No       | Specific VMID to assign (auto-assigns if omitted)                                                                                            |
+| `customize` | No       | Run virt-customize using config from templates.json (default: false)                                                                         |
 
 **Generating a manifest from a directory:**
 
@@ -261,31 +260,31 @@ cd /var/lib/cloudbuilder/templates && python3 -m http.server 8080
 
 ### Command-line Options
 
-| Option | Description |
-|--------|-------------|
-| `--status` | Show template status without making changes |
-| `--update` | Update existing templates |
-| `--rebuild` | Rebuild templates from scratch |
-| `--build-only` | Build templates locally without importing to Proxmox (standalone mode) |
-| `--self-update` | Update cloudbuilder from git repository |
-| `--setup-completions` | Set up shell autocompletions (bash/zsh) |
-| `--import-manifest FILE/URL` | Import pre-built images from a manifest file or URL (JSON) |
-| `--generate-manifest [DIR]` | Generate manifest JSON from a directory of qcow2/img files (default: template directory) |
-| `--base-url URL` | Optional: prefix sources with full URL in generated manifest (by default, outputs just filenames which are resolved relative to manifest URL on import) |
-| `-o, --output FILE` | Output file for generated manifest (default: imports.json, use '-' for stdout) |
-| `--force` | Force operation: for imports, removes and re-imports existing templates; for `--self-update`, discards local changes |
-| `--only LIST` | Process only specific templates (comma-separated) |
-| `--except LIST` | Process all templates except specified ones (comma-separated) |
-| `--config PATH` | Path to templates configuration file (default: templates.json) |
-| `--storage NAME` | Storage location in Proxmox (if not specified, will auto-detect) |
-| `--template-dir PATH` | Directory for storing templates (default: /var/lib/cloudbuilder/templates) |
-| `--temp-dir PATH` | Base directory for temporary files (default: /var/lib/cloudbuilder/tmp) |
-| `--log-dir PATH` | Directory for log files (default: /var/log/cloudbuilder) |
-| `--min-vmid NUM` | Minimum VMID for templates (default: 9000) |
+| Option                       | Description                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--status`                   | Show template status without making changes                                                                                                             |
+| `--update`                   | Update existing templates                                                                                                                               |
+| `--rebuild`                  | Rebuild templates from scratch                                                                                                                          |
+| `--build-only`               | Build templates locally without importing to Proxmox (standalone mode)                                                                                  |
+| `--self-update`              | Update cloudbuilder from git repository                                                                                                                 |
+| `--setup-completions`        | Set up shell autocompletions (bash/zsh)                                                                                                                 |
+| `--import-manifest FILE/URL` | Import pre-built images from a manifest file or URL (JSON)                                                                                              |
+| `--generate-manifest [DIR]`  | Generate manifest JSON from a directory of qcow2/img files (default: template directory)                                                                |
+| `--base-url URL`             | Optional: prefix sources with full URL in generated manifest (by default, outputs just filenames which are resolved relative to manifest URL on import) |
+| `-o, --output FILE`          | Output file for generated manifest (default: imports.json, use '-' for stdout)                                                                          |
+| `--force`                    | Force operation: for imports, removes and re-imports existing templates; for `--self-update`, discards local changes                                    |
+| `--only LIST`                | Process only specific templates (comma-separated)                                                                                                       |
+| `--except LIST`              | Process all templates except specified ones (comma-separated)                                                                                           |
+| `--config PATH`              | Path to templates configuration file (default: templates.json)                                                                                          |
+| `--storage NAME`             | Storage location in Proxmox (if not specified, will auto-detect)                                                                                        |
+| `--template-dir PATH`        | Directory for storing templates (default: /var/lib/cloudbuilder/templates)                                                                              |
+| `--temp-dir PATH`            | Base directory for temporary files (default: /var/lib/cloudbuilder/tmp)                                                                                 |
+| `--log-dir PATH`             | Directory for log files (default: /var/log/cloudbuilder)                                                                                                |
+| `--min-vmid NUM`             | Minimum VMID for templates (default: 9000)                                                                                                              |
 
 ## Storage Detection
 
-CloudBuilder automatically detects and selects a compatible Proxmox storage for VM templates. It:
+Cloudbuilder automatically detects and selects a compatible Proxmox storage for VM templates. It:
 
 1. Scans available storages in your Proxmox environment
 2. Identifies storages that support VM images (content types "images" or "rootdir")
@@ -296,12 +295,13 @@ You can override automatic detection by specifying a storage with `--storage`.
 
 ## Metadata
 
-CloudBuilder maintains metadata about templates in two places:
+Cloudbuilder maintains metadata about templates in two places:
 
 1. `metadata.json` in the template directory
 2. Template notes in Proxmox (accessible via the web UI)
 
 Example metadata.json:
+
 ```json
 {
   "debian-12": {
@@ -335,6 +335,60 @@ Templates are prepared for cloning with these critical steps (handled in `run_co
 3. **Cloud-init State**: Cleared so cloud-init runs fresh on new VMs
 
 See `CLAUDE.md` for detailed implementation notes.
+
+## Testing Templates Locally
+
+You can test built templates locally using QEMU without importing to Proxmox. This is useful for verifying customizations before deployment.
+
+### Quick Test with Cloud-init
+
+```bash
+# Set the template to test
+IMAGE_FILE="/var/lib/cloudbuilder/templates/debian-12.qcow2"
+
+# Create cloud-init data
+mkdir -p /tmp/cidata
+echo "instance-id: test-$(date +%s)" > /tmp/cidata/meta-data
+cat > /tmp/cidata/user-data << 'EOF'
+#cloud-config
+password: cloudbuilder
+chpasswd: {expire: False}
+ssh_pwauth: True
+EOF
+
+# Generate cloud-init ISO
+genisoimage -output /tmp/cidata.iso -volid cidata -joliet -rock /tmp/cidata/
+
+# Boot the template (console mode)
+qemu-system-x86_64 -m 1024 \
+  -hda "$IMAGE_FILE" \
+  -cdrom /tmp/cidata.iso \
+  -nographic -serial mon:stdio
+```
+
+**Notes:**
+- Login with `root` / `cloudbuilder` (or the default cloud user for the distro)
+- Press `Ctrl+A` then `X` to exit QEMU
+- The image is modified during boot - use a copy if you want to preserve the original
+
+### Testing with SSH Access
+
+```bash
+# Boot with port forwarding for SSH
+qemu-system-x86_64 -m 1024 \
+  -hda "$IMAGE_FILE" \
+  -cdrom /tmp/cidata.iso \
+  -nographic -serial mon:stdio \
+  -net nic -net user,hostfwd=tcp::2222-:22
+
+# In another terminal, SSH in:
+ssh -p 2222 root@localhost
+```
+
+### Requirements
+
+- `qemu-system-x86_64` (from qemu-system-x86 package)
+- `genisoimage` (from genisoimage package)
 
 ## Logging
 

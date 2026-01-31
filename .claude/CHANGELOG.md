@@ -1,4 +1,4 @@
-# CloudBuilder Changelog
+# Cloudbuilder Changelog
 
 > LLM-maintained changelog for tracking all modifications to this project.
 
@@ -6,9 +6,107 @@
 
 ## 2025-01-31
 
+### Documentation: Local Template Testing
+
+**Added QEMU testing instructions to README.md**
+
+- New "Testing Templates Locally" section with examples for testing built images
+- Shows how to boot templates with cloud-init for quick verification
+- Includes SSH port forwarding example for remote testing
+- Lists required packages (qemu-system-x86, genisoimage)
+- Files affected: `README.md`
+
+---
+
+### Metadata Sync Improvement
+
+**Suppressed misleading VMID warning on first run**
+
+- Warning "incorrect VMID in metadata: None vs actual X" no longer shown when VMID is simply unset
+- Warning still appears when metadata has a wrong (non-None) VMID value
+- Affected file: `template.py` (sync_metadata_with_proxmox method)
+
+---
+
+## 2025-01-31
+
+### Component Consolidation & Expansion
+
+**Merged distro-specific components into unified cross-platform components**
+
+- `motd-rhel`, `motd-debian`, `motd-ubuntu` → single `motd` component
+- `finalize-rhel`, `finalize-debian` → single `finalize` component
+- MOTD script content extracted to `files/cloudbuilder-motd` (imported via `copy_files`)
+- `motd` component auto-detects OS (update-motd.d vs profile.d) and applies correct setup
+- `finalize` component uses fallback commands (`systemctl enable sshd || ssh`)
+
+**Extracted common patterns into new components**
+
+- `timezone` - timezone setup (used by all 7 templates)
+- `rhel-base` - RHEL packages + SELinux/chrony/qemu-ga setup
+- `debian-base` - Debian/Ubuntu packages + unattended-upgrades setup
+- `locale` - en_US.UTF-8 locale setup (Debian only, Ubuntu has it pre-configured)
+- Final component count: 9 (system, shell, qemu-agent, timezone, rhel-base, debian-base, locale, motd, finalize)
+
+**Moved packages to components**
+
+- `system`: curl, git, wget, ca-certificates, traceroute, tcpdump, python3, jq, bash-completion
+- `rhel-base`: vim-minimal, chrony, mtr, bind-utils, cloud-utils-growpart
+- `debian-base`: cron, vim-tiny, mtr-tiny, dnsutils, cloud-guest-utils, unattended-upgrades, htop, bpytop
+- Templates now only specify distro-specific extras (dnf-automatic, resolvconf, etc.)
+
+**Moved common run_commands to components**
+
+- `rhel-base`: `dnf -y upgrade`, SELinux disable, chrony enable, qemu-ga filter config
+- `debian-base`: `apt-get update && apt-get -y dist-upgrade`, timesyncd enable, unattended-upgrades config
+- Templates now only have distro-specific commands (EPEL, locale-gen, cloudimg cleanup)
+
+**Fixed motd file staging**
+
+- Changed from `/tmp/` to `/etc/` for cleaner file staging
+- Files affected: `templates.json`, `files/cloudbuilder-motd` (new)
+
+---
+
+### Component System for templates.json
+
+**Added support for reusable components to reduce template duplication**
+
+- New `_resolve_template()` method in TemplateManager handles component resolution
+- Templates can now reference components via a `uses` array
+- Components can define `install_packages`, `run_commands`, and `copy_files`
+- Merge strategy: components applied in order, then template's own values appended
+- Backward compatible: legacy flat format (without components) still works
+- Files affected: `template.py`
+
+**New templates.json format:**
+
+```json
+{
+  "components": {
+    "base-hardening": {
+      "description": "Sysctl security hardening",
+      "run_commands": [
+        "printf '%s\\n' 'net.ipv4.tcp_syncookies=1' ... > /etc/sysctl.d/99-cloudbuilder.conf"
+      ]
+    }
+  },
+  "templates": {
+    "debian-12": {
+      "image_url": "...",
+      "uses": ["base-hardening", "motd-debian"],
+      "install_packages": ["curl", "git"]
+    }
+  }
+}
+```
+
+---
+
 ### File Import Feature (`copy_files`)
 
 **Added support for copying files from host into template images**
+
 - New `copy_files` field in templates.json allows specifying files to copy into the image
 - Uses `virt-customize --copy-in` under the hood
 - Files are copied after `install_packages` but before `run_commands`
@@ -20,6 +118,7 @@
 ### Documentation Cleanup
 
 **Reduced redundancy between README.md and CLAUDE.md**
+
 - README.md: User-facing documentation (usage, configuration, examples)
 - CLAUDE.md: Implementation details for AI assistants (distro quirks, troubleshooting)
 - Removed duplicate template structure examples and copy_files docs from CLAUDE.md
@@ -30,6 +129,7 @@
 ### XZ Compressed Image Support
 
 **Added automatic decompression of XZ-compressed cloud images**
+
 - Download function now detects URLs ending with `.xz` extension
 - Automatically decompresses XZ files after download using Python's `lzma` module
 - Fixes FreeBSD template import which provides qcow2 images as `.qcow2.xz` archives
@@ -38,6 +138,7 @@
 - Files affected: `template.py`
 
 **Example:**
+
 ```
 # FreeBSD image URL ends with .qcow2.xz
 "image_url": "https://download.freebsd.org/.../FreeBSD-14.3-RELEASE-amd64-BASIC-CLOUDINIT-ufs.qcow2.xz"
@@ -55,7 +156,8 @@
 ### Standalone Mode Support
 
 **Added support for running cloudbuilder on non-Proxmox systems**
-- CloudBuilder now automatically detects if Proxmox VE is available
+
+- Cloudbuilder now automatically detects if Proxmox VE is available
 - When Proxmox is not detected, runs in standalone mode (builds images locally only)
 - New `--build-only` flag to explicitly skip Proxmox import even on Proxmox systems
 - Status table adapts to show only relevant columns in standalone mode (no Proxmox/VMID columns)
@@ -63,9 +165,11 @@
 - Files affected: `cloudbuilder.py`, `utils.py`
 
 **New utility function:**
+
 - Added `is_proxmox_available()` in `utils.py` - checks for `pvesh` command availability
 
 **Example usage:**
+
 ```bash
 # On a standalone system (auto-detected)
 cloudbuilder --status
@@ -81,6 +185,7 @@ cloudbuilder --build-only --only debian-12
 ### Self-Update Local Changes Handling
 
 **Enhanced `--self-update` to handle local modifications gracefully**
+
 - Previously, `--self-update` would fail with cryptic git error if local changes existed
 - Now detects local changes before attempting update using `git status --porcelain`
 - Without `--force`: Shows clear error with options (use force, or manually stash)
@@ -89,6 +194,7 @@ cloudbuilder --build-only --only debian-12
 - Files affected: `utils.py`, `cloudbuilder.py`
 
 **Example usage:**
+
 ```bash
 # If local changes exist, this now shows helpful options instead of git error
 cloudbuilder --self-update
@@ -102,6 +208,7 @@ cloudbuilder --self-update --force
 ### Manifest Import/Export Improvements
 
 **Relative URL Resolution for Remote Manifests**
+
 - `--generate-manifest` now outputs just filenames by default (not absolute paths)
 - `--import-manifest` now resolves relative sources against the manifest URL when fetching from HTTP
 - This allows portable manifests: generate once, import from any host via URL
@@ -114,12 +221,14 @@ cloudbuilder --self-update --force
 ### Templates.json Improvements
 
 **Crontab Syntax Standardization**
+
 - Changed all QEMU guest agent cron entries to use consistent, robust syntax
 - Added `2>/dev/null` to suppress "no crontab for user" errors on first run
 - Standardized spacing: `>/dev/null` (no space)
 - Affected: All 7 templates
 
 **Package Update Strategy Change**
+
 - Changed `update_packages` from `true` to `false` for all templates
 - Added manual upgrade commands at the start of `run_commands`:
   - RHEL-based (Alma, Fedora): `sudo dnf -y upgrade`
@@ -128,6 +237,7 @@ cloudbuilder --self-update --force
 - Affected: alma-9, alma-10, debian-12, debian-13, ubuntu-24-04, ubuntu-25-04
 
 **SSH Host Key Regeneration**
+
 - Added SSH host key deletion and regeneration enablement to ALL templates
 - Ensures each cloned VM gets unique SSH host keys
 - RHEL-based pattern:
@@ -148,6 +258,7 @@ cloudbuilder --self-update --force
 ## Previous Changes (Pre-Changelog)
 
 ### 2025-01 (January)
+
 - Added alma-10, debian-13, ubuntu-25-04, fedora-42 templates
 - Fixed EPEL package installation order issue (htop/bpytop moved to run_commands)
 - Added machine-id truncation for proper cloning
@@ -155,4 +266,5 @@ cloudbuilder --self-update --force
 - Added TCP keepalive tuning, journald limits, bash-completion
 
 ### 2024-01 (January)
+
 - Initial template setup for alma-9, debian-12, ubuntu-24-04
