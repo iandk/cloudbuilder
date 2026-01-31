@@ -94,7 +94,9 @@ Use `copy_files` to embed files into the template image. Files are copied after 
 ```
 
 - **Keys**: Local file paths (relative to cloudbuilder directory or absolute)
-- **Values**: Destination directories inside the image (must end with `/`)
+- **Values**: Destination **directories** inside the image (must end with `/`)
+  - Correct: `"/etc/nginx/"` - copies file into /etc/nginx/
+  - Wrong: `"/etc/nginx/nginx.conf"` - this will fail (not a directory)
 - **Recommended**: Store files in the `files/` directory in the cloudbuilder root
 
 ### Template Configuration Options

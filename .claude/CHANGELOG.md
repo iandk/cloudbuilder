@@ -14,6 +14,7 @@
 - Files are copied after `install_packages` but before `run_commands`
 - Paths are resolved relative to the cloudbuilder directory (where templates.json is)
 - Validates that source files exist before starting customization
+- Validates that destination paths end with `/` (must be directories, not file paths)
 - Files affected: `template.py`, `README.md`, `CLAUDE.md`
 
 ### Documentation Cleanup

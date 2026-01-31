@@ -310,6 +310,13 @@ class TemplateManager:
                 if not source_path.exists():
                     raise FileNotFoundError(f"Copy source file not found: {source_path}")
 
+                # Validate destination is a directory path (must end with /)
+                if not dest_path.endswith('/'):
+                    raise ValueError(
+                        f"copy_files destination must be a directory (end with '/'): "
+                        f"'{dest_path}' should be '{dest_path}/' or a directory like '/etc/'"
+                    )
+
                 # virt-customize --copy-in format: local_path:remote_dir
                 commands.extend(["--copy-in", f"{source_path}:{dest_path}"])
                 self.logger.debug(f"Will copy {source_path} to {dest_path} in image")
