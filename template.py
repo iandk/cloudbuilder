@@ -40,6 +40,7 @@ class Template:
     run_commands: List[str]
     ssh_password_auth: bool
     ssh_root_login: bool
+    min_size: Optional[str] = None  # Minimum disk size (e.g., "1G", "500M")
     build_date: Optional[str] = None
     last_update: Optional[str] = None
     vmid: Optional[int] = None
@@ -97,7 +98,8 @@ class TemplateManager:
                     update_packages=t.get("update_packages", False),
                     run_commands=t.get("run_commands", []),
                     ssh_password_auth=t.get("ssh_password_auth", False),
-                    ssh_root_login=t.get("ssh_root_login", False)
+                    ssh_root_login=t.get("ssh_root_login", False),
+                    min_size=t.get("min_size")
                 )
                 
                 # Load metadata if available
@@ -192,18 +194,89 @@ class TemplateManager:
             if temp_file.exists():
                 temp_file.unlink()
             raise
-    
+
+    def resize_image_if_needed(self, template: Template, image_path: Path) -> None:
+        """Resize the qcow2 image if it's smaller than the template's min_size."""
+        if not template.min_size:
+            return
+
+        self.logger.info(f"Checking if {template.name} needs resizing to {template.min_size}")
+
+        try:
+            # Get current image size using qemu-img info
+            result = subprocess.run(
+                ["qemu-img", "info", "--output=json", str(image_path)],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            info = json.loads(result.stdout)
+            current_size = info.get("virtual-size", 0)
+
+            # Parse min_size (e.g., "1G", "500M", "2048M")
+            min_size_str = template.min_size.upper().strip()
+            if min_size_str.endswith("G"):
+                min_size_bytes = int(float(min_size_str[:-1]) * 1024 * 1024 * 1024)
+            elif min_size_str.endswith("M"):
+                min_size_bytes = int(float(min_size_str[:-1]) * 1024 * 1024)
+            elif min_size_str.endswith("K"):
+                min_size_bytes = int(float(min_size_str[:-1]) * 1024)
+            else:
+                # Assume bytes if no suffix
+                min_size_bytes = int(min_size_str)
+
+            if current_size < min_size_bytes:
+                self.logger.info(
+                    f"Resizing {template.name} from {current_size / (1024*1024*1024):.2f}G to {template.min_size}"
+                )
+                subprocess.run(
+                    ["qemu-img", "resize", str(image_path), template.min_size],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                self.logger.info(f"Successfully resized {template.name} to {template.min_size}")
+            else:
+                self.logger.debug(
+                    f"{template.name} already meets min_size ({current_size / (1024*1024*1024):.2f}G >= {template.min_size})"
+                )
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to resize image for {template.name}: {e.stderr}")
+            raise RuntimeError(f"Failed to resize image: {e.stderr}")
+        except Exception as e:
+            self.logger.error(f"Failed to resize image for {template.name}: {e}")
+            raise
+
     def customize_image(self, template: Template, image_path: Path, update_mode: bool = False) -> None:
         """Customize the image using virt-customize with a simple status indicator."""
+
+        # Check if there's anything to customize
+        has_work = (
+            template.update_packages or
+            update_mode or
+            template.install_packages or
+            template.run_commands or
+            template.ssh_password_auth or
+            template.ssh_root_login
+        )
+
+        if not has_work:
+            self.logger.info(f"Skipping customization for {template.name} (no packages/commands defined)")
+            # Still update build info
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            template.build_date = current_time
+            template.last_update = None
+            return
+
         self.logger.info(f"Customizing image for {template.name}")
-        
+
         commands = []
         if template.update_packages or update_mode:
             commands.extend(["--update"])
-        
+
         if template.install_packages:
             commands.extend(["--install", ",".join(template.install_packages)])
-        
+
         for cmd in template.run_commands:
             commands.extend(["--run-command", cmd])
 
@@ -272,6 +345,7 @@ class TemplateManager:
         """Build template and return the path to the built image."""
         use_existing = not force and self.template_exists_locally(template)
         image_path = self.download_image(template, use_existing=use_existing)
+        self.resize_image_if_needed(template, image_path)
         self.customize_image(template, image_path, update_mode=update)
         
         # Copy finished image to template directory
