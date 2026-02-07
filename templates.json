@@ -279,6 +279,7 @@
                 "traceroute",
                 "tcpdump",
                 "python3",
+                "python3-pip",
                 "jq",
                 "bash-completion"
             ],
@@ -414,6 +415,7 @@
                 "traceroute",
                 "tcpdump",
                 "python3",
+                "python3-pip",
                 "jq",
                 "bash-completion"
             ],
