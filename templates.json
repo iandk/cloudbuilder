@@ -42,6 +42,7 @@
         },
         "debian-12": {
             "image_url": "https://cdimage.debian.org/cdimage/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
+            "min_size": "5G",
             "uses": [
                 "qemu-agent",
                 "system",
@@ -59,6 +60,7 @@
         },
         "debian-13": {
             "image_url": "https://cdimage.debian.org/cdimage/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
+            "min_size": "5G",
             "uses": [
                 "qemu-agent",
                 "system",
@@ -76,6 +78,7 @@
         },
         "ubuntu-24-04": {
             "image_url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+            "min_size": "5G",
             "uses": [
                 "qemu-agent",
                 "system",
@@ -95,6 +98,7 @@
         },
         "ubuntu-25-04": {
             "image_url": "https://cloud-images.ubuntu.com/plucky/current/plucky-server-cloudimg-amd64.img",
+            "min_size": "5G",
             "uses": [
                 "qemu-agent",
                 "system",
