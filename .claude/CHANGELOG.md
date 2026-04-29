@@ -4,6 +4,20 @@
 
 ---
 
+## 2026-04-29
+
+### Fix: Debian/Ubuntu builds run out of disk during package install
+
+**Added `grow_partition: "1"` to debian-12, debian-13, ubuntu-24-04, ubuntu-25-04**
+
+- These templates set `min_size: "5G"` but did not set `grow_partition`, so `qemu-img resize` grew the qcow2 file while the rootfs partition remained at its original ~2-3G size.
+- Adding `python3-pip` (which recommends `build-essential`, `libpython3-dev`, `gcc-14`, etc., ~600MB) tipped the cramped rootfs over the limit, causing `dpkg` to fail with "No space left on device" partway through unpacking gcc/g++/libpython3-dev.
+- Rootfs lives on partition 1 in both Debian genericcloud and Ubuntu cloud images (Ubuntu has separate 14/15 for BIOS boot/EFI).
+
+Files affected: `templates.json`
+
+---
+
 ## 2025-01-31
 
 ### New Feature: `grow_partition` for min_size images
