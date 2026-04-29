@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import sys
+import traceback
 from pathlib import Path
 
 try:
@@ -311,7 +312,8 @@ def main():
                 success_count += 1
 
             except Exception as e:
-                logger.error(f"Failed to import template '{name}': {e}", exc_info=True)
+                logger.error(f"Failed to import template '{name}': {e}")
+                logger.debug(f"Traceback for import '{name}':\n{traceback.format_exc()}")
                 continue
 
         # Print import summary
@@ -452,7 +454,10 @@ def main():
 
         # First, build all templates locally
         built_templates = {}
+        build_failures = {}
+        import_failures = {}
         up_to_date_count = 0
+        up_to_date_templates = []
 
         for name, template in filtered_templates.items():
             try:
@@ -488,6 +493,7 @@ def main():
                     else:
                         # Template exists both locally (and in Proxmox if not standalone) - nothing to do
                         up_to_date_count += 1
+                        up_to_date_templates.append(name)
                         # Ensure firewall settings are correct for existing templates (Proxmox only)
                         if not standalone_mode and proxmox_manager and template.vmid:
                             proxmox_manager.ensure_firewall_settings(template.vmid, name)
@@ -495,7 +501,15 @@ def main():
                 template_manager.save_metadata()
 
             except Exception as e:
-                logger.error(f"Failed to build template {name}: {e}", exc_info=True)
+                # `exc_info=True` would route the traceback to every handler — including
+                # the console — even though RichHandler has rich_tracebacks=False
+                # (that flag controls *formatting*, not whether tracebacks are emitted).
+                # We want a clean console summary and a full traceback only in the log
+                # file, so we log the message at ERROR and the traceback separately at
+                # DEBUG (which the file handler picks up but the console suppresses).
+                logger.error(f"Failed to build template {name}: {e}")
+                logger.debug(f"Traceback for {name}:\n{traceback.format_exc()}")
+                build_failures[name] = str(e)
                 continue
 
         # Then, import/update templates in Proxmox one by one (skip in standalone mode)
@@ -530,17 +544,56 @@ def main():
                     logger.info(f"Successfully processed template: {name}")
 
                 except Exception as e:
-                    logger.error(f"Failed to import template {name} to Proxmox: {e}", exc_info=True)
+                    logger.error(f"Failed to import template {name} to Proxmox: {e}")
+                    logger.debug(f"Traceback for Proxmox import '{name}':\n{traceback.format_exc()}")
+                    import_failures[name] = str(e)
                     continue
 
         # Print summary
-        if built_templates:
-            logger.info(f"Processed {len(built_templates)} template(s)")
-        elif up_to_date_count > 0:
-            logger.info(f"All {up_to_date_count} template(s) up to date. Use --update or --rebuild to refresh.")
+        total = len(built_templates) + len(build_failures) + up_to_date_count
+        has_failures = bool(build_failures or import_failures)
+
+        if total > 0:
+            summary_table = Table(title="Build Summary", show_lines=False)
+            summary_table.add_column("Template", style="bold")
+            summary_table.add_column("Status")
+            summary_table.add_column("Detail")
+
+            # Successful builds (that also imported successfully or standalone)
+            for name in built_templates:
+                if name in import_failures:
+                    summary_table.add_row(name, "[red]FAIL[/red]", "Import failed")
+                elif standalone_mode:
+                    summary_table.add_row(name, "[green]OK[/green]", "Built locally")
+                else:
+                    summary_table.add_row(name, "[green]OK[/green]", "Built + imported")
+
+            # Build failures
+            for name in build_failures:
+                summary_table.add_row(name, "[red]FAIL[/red]", "Build failed")
+
+            # Up-to-date templates
+            for name in up_to_date_templates:
+                summary_table.add_row(name, "[dim]--[/dim]", "[dim]Up to date[/dim]")
+
+            console.print()
+            console.print(summary_table)
+
+            success_count = len(built_templates) - len(import_failures)
+            fail_count = len(build_failures) + len(import_failures)
+
+            if has_failures:
+                logger.warning(f"{fail_count} of {total - up_to_date_count} template(s) failed")
+            elif built_templates:
+                logger.info(f"All {success_count} template(s) processed successfully")
+            else:
+                logger.info(f"All {up_to_date_count} template(s) up to date. Use --update or --rebuild to refresh.")
 
     except Exception as e:
         logger.error(f"An error occurred: {e}", exc_info=True)
+        sys.exit(1)
+
+    if build_failures or import_failures:
         sys.exit(1)
 
 
