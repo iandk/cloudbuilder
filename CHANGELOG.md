@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - `--self-update` now re-runs `install.sh` automatically when it detects `install.sh` changed between commits, so dependency updates propagate to existing hosts via the nightly auto-update timer. Previously the timer only did `git pull`, meaning any change to apt packages required a manual re-run of `install.sh` on every host — which is exactly how three hosts ended up with stale `passt` after the libguestfs networking fix shipped.
+- virt-customize failure output is now readable. Previously a failure printed the full multi-hundred-line virt-customize stderr **three times** on the console (once at the inner ERROR, once when the customize wrapper re-raised, once when the outer build loop caught it with `exc_info=True`). Now: the full output is written to `/var/log/cloudbuilder/failures/{template}-{timestamp}.log` for forensics, the rolling `cloudbuilder.log` gets it at DEBUG level, and the console shows just a one-line summary with exit code and dump path, plus the last 20 lines of stderr (where the actual error almost always lives) so the operator can see what broke without opening the dump file.
 
 ### Fixed
 - PAM MOTD configuration now idempotent (checks before appending)

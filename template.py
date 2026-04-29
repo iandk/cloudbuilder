@@ -66,6 +66,49 @@ def validate_template_name(name: str) -> None:
         )
 
 
+def _extract_error_summary(stderr: str, max_lines: int = 20) -> str:
+    """
+    Extract the most useful tail of a virt-customize failure for the operator.
+
+    virt-customize stderr can be hundreds of lines (full apt-get output etc.).
+    The actual root cause is almost always in the last ~20 lines, but the
+    immediately surrounding context (e.g., the apt-get command line that ran)
+    is also useful. We just take the tail — pattern-matching to "extract only
+    error lines" tends to drop important context like which package failed.
+    """
+    if not stderr:
+        return ""
+    lines = stderr.rstrip().splitlines()
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    return "\n".join(lines[-max_lines:])
+
+
+def _write_failure_dump(template_name: str, full_output: str, logger: logging.Logger) -> Path:
+    """
+    Persist the full virt-customize output to a per-failure file under the
+    log directory so operators can `cat` it directly without grepping the
+    rolling cloudbuilder.log. Returns the dump path; on write failure, falls
+    back to /tmp and never raises (we're already in an error path).
+    """
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"{template_name}-{timestamp}.log"
+    candidates = [
+        Path("/var/log/cloudbuilder/failures") / filename,
+        Path(tempfile.gettempdir()) / filename,
+    ]
+    for path in candidates:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(full_output)
+            return path
+        except OSError as e:
+            logger.debug(f"Could not write failure dump to {path}: {e}")
+    # Both locations failed — return the last attempted path so the caller still
+    # has something to print, even though it doesn't exist on disk.
+    return candidates[-1]
+
+
 @dataclass
 class Template:
     """Template data model."""
@@ -640,11 +683,33 @@ class TemplateManager:
                     time.sleep(1)
                 
                 stdout, stderr = process.communicate()
-                
+
                 if process.returncode != 0:
-                    error_msg = f"virt-customize failed with code {process.returncode}: {stderr}"
-                    self.logger.error(error_msg)
-                    raise RuntimeError(error_msg)
+                    # Full output is verbose (often hundreds of lines of apt output).
+                    # Strategy: dump everything to a per-failure file under the log dir
+                    # for forensics, log the full text at DEBUG so the rolling
+                    # cloudbuilder.log keeps a copy, and show only a short summary
+                    # plus the meaningful tail on the console.
+                    full_output = (stderr or "") + ("\n--- stdout ---\n" + stdout if stdout else "")
+                    dump_path = _write_failure_dump(template.name, full_output, self.logger)
+                    self.logger.debug(f"virt-customize full output for {template.name}:\n{full_output}")
+                    tail = _extract_error_summary(stderr or "", max_lines=20)
+
+                    self.logger.error(
+                        f"virt-customize failed for [bold]{template.name}[/bold] "
+                        f"(exit code {process.returncode}). Full output: {dump_path}"
+                    )
+                    if tail:
+                        # Use a non-logger print so the multi-line tail isn't prefixed
+                        # with "ERROR" on every line — that would just add noise.
+                        console.print(f"[dim]--- last {len(tail.splitlines())} relevant lines ---[/dim]")
+                        console.print(tail, highlight=False)
+                        console.print(f"[dim]--- end of error tail ---[/dim]")
+                    # Short message on the exception so re-raises up the stack stay terse.
+                    raise RuntimeError(
+                        f"virt-customize failed for {template.name} (exit {process.returncode}); "
+                        f"see {dump_path}"
+                    )
             
             # Update build information after successful customization
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -654,8 +719,14 @@ class TemplateManager:
                 template.build_date = current_time
                 template.last_update = None  # Clear stale last_update on fresh build
             
+        except RuntimeError:
+            # Already logged with summary + tail above; don't re-log the same line.
+            if process and process.poll() is None:
+                process.kill()
+            raise
         except Exception as e:
-            self.logger.error(f"Failed to customize image for {template.name}: {str(e)}")
+            # Anything else (e.g., TimeoutError, OSError) — log once and bubble up.
+            self.logger.error(f"Failed to customize image for {template.name}: {e}")
             if process and process.poll() is None:
                 process.kill()
             raise
