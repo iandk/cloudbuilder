@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - EPEL component: Better error handling with stderr warnings, skips dependent installs on failure
 - SSH/dnf-automatic service enablement: Now warns to stderr instead of silent failure
 
+### Changed
+- `--self-update` now re-runs `install.sh` automatically when it detects `install.sh` changed between commits, so dependency updates propagate to existing hosts via the nightly auto-update timer. Previously the timer only did `git pull`, meaning any change to apt packages required a manual re-run of `install.sh` on every host — which is exactly how three hosts ended up with stale `passt` after the libguestfs networking fix shipped.
+
 ### Fixed
 - PAM MOTD configuration now idempotent (checks before appending)
 - Crontab entries for qemu-agent watchdog now idempotent (both systemd and OpenRC variants)

@@ -292,6 +292,42 @@ def self_update(install_dir: Path, logger: logging.Logger, force: bool = False) 
                 logger.info("Changes:")
                 for line in result.stdout.strip().split('\n'):
                     logger.info(f"  {line}")
+
+            # If install.sh changed between commits, re-run it so dependency changes
+            # propagate to the host. Without this, the only way to pick up new apt
+            # packages is for the operator to manually re-run install.sh — which is
+            # easy to forget. We hit this in 2026-04 when removing `passt` from
+            # install.sh: the git pull worked but `passt` stayed installed on every
+            # host, silently breaking libguestfs networking. apt-get install is a
+            # no-op when packages are already current, so the cost on unchanged
+            # hosts is tiny.
+            try:
+                diff_result = subprocess.run(
+                    ["git", "diff", "--name-only", f"{old_commit}..{new_commit}", "--", "install.sh"],
+                    cwd=install_dir,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                if diff_result.stdout.strip():
+                    install_sh = install_dir / "install.sh"
+                    if install_sh.exists():
+                        logger.info("install.sh changed — re-running to apply dependency updates")
+                        rerun = subprocess.run(
+                            ["bash", str(install_sh)],
+                            capture_output=True,
+                            text=True
+                        )
+                        if rerun.returncode == 0:
+                            logger.info("install.sh re-run completed")
+                        else:
+                            logger.warning(
+                                f"install.sh re-run exited with code {rerun.returncode}; "
+                                f"manual `bash {install_sh}` may be needed. "
+                                f"stderr: {rerun.stderr.strip()[:500]}"
+                            )
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"Could not check install.sh changes: {e.stderr if e.stderr else e}")
         else:
             logger.info("Already up to date (local changes were discarded)")
 
