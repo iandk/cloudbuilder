@@ -1,7 +1,22 @@
 #!/bin/bash
 
 # Install dependencies
-apt update && apt install -y python3 python3-pip python3-rich libguestfs-tools wget jq unzip curl git ovmf dhcpcd-base passt
+# NOTE: We deliberately do NOT install `passt`. If `passt` is present, libguestfs
+# prefers it over libslirp, but passt has no built-in DHCP server. The supermin
+# appliance's /init unconditionally calls `dhclient eth0`, gets no DHCPOFFER,
+# and the appliance ends up with only `lo` — every `apt-get update` then fails
+# with "Temporary failure resolving deb.debian.org". libslirp/SLIRP DOES have
+# DHCP, so falling back to it makes the appliance get an IP automatically.
+# isc-dhcp-client provides /sbin/dhclient that the appliance init expects.
+apt update && apt install -y python3 python3-pip python3-rich libguestfs-tools wget jq unzip curl git ovmf isc-dhcp-client
+
+# Remove passt if it slipped in (e.g., older install.sh or a co-installed package
+# that pulled it). libguestfs auto-prefers passt and breaks if present.
+apt remove -y passt 2>/dev/null || true
+
+# Wipe the cached supermin appliance so the next virt-customize rebuilds it
+# without passt-specific qemu args baked in.
+rm -rf /var/tmp/.guestfs-* 2>/dev/null || true
 
 # Installation directories
 INSTALL_DIR="/opt/cloudbuilder"
