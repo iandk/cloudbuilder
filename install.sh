@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Install dependencies
-apt update && apt install -y python3 python3-pip python3-rich libguestfs-tools wget jq unzip curl git ovmf
+apt update && apt install -y python3 python3-pip python3-rich libguestfs-tools wget jq unzip curl git ovmf dhcpcd-base passt
 
 # Installation directories
 INSTALL_DIR="/opt/cloudbuilder"
