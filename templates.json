@@ -368,7 +368,8 @@
                 "dnsutils",
                 "cloud-guest-utils",
                 "htop",
-                "bpytop"
+                "bpytop",
+                "systemd-timesyncd"
             ],
             "run_commands": [
                 "apt-get update && apt-get -y dist-upgrade",
