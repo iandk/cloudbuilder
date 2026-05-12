@@ -779,13 +779,53 @@ class TemplateManager:
                 process.kill()
             raise
 
+    def sparsify_image(self, template: Template, image_path: Path) -> None:
+        """Reclaim unused qcow2 blocks via virt-sparsify --in-place.
+
+        Skipped for templates with skip_customization (they ship the upstream image as-is).
+        Failure is non-fatal — sparsify is an optimization, not a correctness requirement,
+        and some upstream cloud images use partition layouts virt-sparsify can't traverse.
+        """
+        if template.skip_customization:
+            return
+
+        # Measure physical blocks, not logical size. `virt-sparsify --in-place`
+        # punches holes in the qcow2 to make it sparse on the underlying filesystem;
+        # st_size stays identical, only st_blocks drops. Using st_size here would
+        # always report "reclaimed nothing" even when sparsify reclaimed gigabytes.
+        try:
+            before = image_path.stat().st_blocks * 512
+            with console.status(f"Sparsifying {template.name}", spinner="dots"):
+                subprocess.run(
+                    ["virt-sparsify", "--in-place", str(image_path)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            after = image_path.stat().st_blocks * 512
+            reclaimed = before - after
+            if reclaimed > 0:
+                self.logger.info(
+                    f"Sparsified {template.name}: {before / (1024**3):.2f}G -> "
+                    f"{after / (1024**3):.2f}G on disk (reclaimed {reclaimed / (1024**2):.0f} MiB)"
+                )
+            else:
+                self.logger.debug(f"Sparsify of {template.name} reclaimed nothing")
+        except subprocess.CalledProcessError as e:
+            tail = (e.stderr or "").splitlines()[-5:]
+            self.logger.warning(
+                f"virt-sparsify failed for {template.name} (exit {e.returncode}); "
+                f"continuing without sparsify. Stderr tail: {' | '.join(tail)}"
+            )
+
     def build_template(self, template: Template, update: bool = False, force: bool = False) -> Path:
         """Build template and return the path to the built image."""
         use_existing = not force and self.template_exists_locally(template)
         image_path = self.download_image(template, use_existing=use_existing)
         self.resize_image_if_needed(template, image_path)
         self.customize_image(template, image_path, update_mode=update)
-        
+        self.sparsify_image(template, image_path)
+
         # Copy finished image to template directory
         template_path = self.get_template_path(template)
         shutil.copy2(image_path, template_path)

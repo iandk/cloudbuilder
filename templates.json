@@ -496,13 +496,20 @@
             ]
         },
         "finalize": {
-            "description": "Final cleanup: SSH keys, cloud-init, machine-id",
+            "description": "Final cleanup: package caches, logs, SSH keys, cloud-init, machine-id, fstrim",
             "run_commands": [
                 "rm -f /etc/ssh/ssh_host_* /etc/ssh/sshd_config.d/60-cloudimg-settings.conf",
                 "systemctl enable sshd-keygen.target 2>/dev/null || true",
                 "systemctl enable sshd 2>/dev/null || systemctl enable ssh 2>/dev/null || echo 'WARNING: Could not enable SSH service' >&2",
                 "rm -rf /var/lib/cloud/instance /var/lib/cloud/data",
-                "truncate -s 0 /etc/machine-id"
+                "(command -v apt-get >/dev/null && apt-get clean && rm -rf /var/lib/apt/lists/*) || true",
+                "(command -v dnf >/dev/null && dnf clean all && rm -rf /var/cache/dnf/*) || true",
+                "(command -v zypper >/dev/null && zypper clean -a) || true",
+                "(journalctl --rotate && journalctl --vacuum-time=1s) 2>/dev/null || rm -rf /var/log/journal/* 2>/dev/null || true",
+                "find /var/log -type f \\( -name '*.log' -o -name '*.gz' -o -name '*.1' \\) -delete 2>/dev/null || true",
+                "rm -rf /tmp/* /var/tmp/* /root/.cache /home/*/.cache 2>/dev/null || true",
+                "truncate -s 0 /etc/machine-id",
+                "fstrim -av 2>/dev/null || true"
             ]
         }
     }
