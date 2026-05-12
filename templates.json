@@ -296,6 +296,27 @@
             "update_packages": true,
             "ssh_password_auth": false,
             "ssh_root_login": false
+        },
+        "ubuntu-26-04": {
+            "image_url": "https://cloud-images.ubuntu.com/releases/resolute/release/ubuntu-26.04-server-cloudimg-amd64.img",
+            "min_size": "5G",
+            "grow_partition": "1",
+            "uses": [
+                "qemu-agent",
+                "system",
+                "shell",
+                "timezone",
+                "debian-base",
+                "unattended-upgrades",
+                "motd",
+                "finalize"
+            ],
+            "install_packages": [
+                "resolvconf"
+            ],
+            "update_packages": true,
+            "ssh_password_auth": false,
+            "ssh_root_login": false
         }
     },
     "components": {

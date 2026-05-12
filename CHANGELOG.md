@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Template name validation against Proxmox naming rules (alphanumeric, hyphen, underscore, period; max 63 chars)
+- Ubuntu 26.04 LTS template using Canonical's released `resolute` cloud image, so CloudBuilder targets the actual 26.04 release instead of the older daily build.
 - Alpine: BBR congestion control (`net.core.default_qdisc=fq`, `net.ipv4.tcp_congestion_control=bbr`)
 - Alpine: Extracted DNS resolver script to `files/alpine/resolv-conf` for maintainability
 
