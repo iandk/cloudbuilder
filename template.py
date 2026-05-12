@@ -434,10 +434,13 @@ class TemplateManager:
                         grow_cmd = "true"
                         resize_cmd = "resize2fs /dev/sda || resize2fs /dev/vda || echo 'resize done'"
                     else:
-                        # Build growpart command that tries both sda and vda
-                        grow_cmd = f"growpart /dev/sda {part_num} || growpart /dev/vda {part_num} || echo 'growpart done'"
+                        # qemu-img resize leaves GPT backup headers at the old disk
+                        # end. Repair that first; otherwise growpart can fail while
+                        # resize2fs still expands the filesystem past the partition.
+                        repair_gpt_cmd = "sgdisk -e /dev/sda || sgdisk -e /dev/vda || true"
+                        grow_cmd = f"({repair_gpt_cmd}) && (growpart /dev/sda {part_num} || growpart /dev/vda {part_num})"
                         # Build filesystem resize command (try xfs first, then ext4)
-                        resize_cmd = f"xfs_growfs / || resize2fs /dev/sda{part_num} || resize2fs /dev/vda{part_num} || echo 'resize done'"
+                        resize_cmd = f"xfs_growfs / || resize2fs /dev/sda{part_num} || resize2fs /dev/vda{part_num}"
 
                     try:
                         subprocess.run(
@@ -450,8 +453,13 @@ class TemplateManager:
                         )
                         self.logger.info(f"Successfully grew partition {part_num} in {template.name}")
                     except subprocess.CalledProcessError as e:
-                        # Log but don't fail - growpart might already be at max or filesystem type differs
-                        self.logger.warning(f"Partition grow returned non-zero (may be OK): {e.stderr}")
+                        if part_num == "0":
+                            # Log but don't fail - whole-disk filesystem resize may
+                            # be a no-op for images that already expose full size.
+                            self.logger.warning(f"Filesystem resize returned non-zero (may be OK): {e.stderr}")
+                        else:
+                            self.logger.error(f"Failed to grow partition {part_num} in {template.name}: {e.stderr}")
+                            raise RuntimeError(f"Failed to grow partition {part_num}: {e.stderr}")
             else:
                 self.logger.debug(
                     f"{template.name} already meets min_size ({current_size / (1024*1024*1024):.2f}G >= {template.min_size})"
