@@ -36,6 +36,32 @@ CUSTOMIZE_TIMEOUT = 1800  # 30 minutes timeout for customization (includes packa
 PROXMOX_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*$')
 PROXMOX_NAME_MAX_LENGTH = 63
 
+# grub-install divert: Debian 13+ cloud images ship grub-cloud-amd64, whose dpkg
+# trigger calls `grub-install` for x86_64-efi during any grub-related upgrade.
+# That writes to /boot/efi, which libguestfs < 1.50 (Debian 12 build hosts)
+# fails to auto-mount from the cloud image's fstab. Result: the trigger fails
+# and the whole customize aborts.
+#
+# We sidestep this by diverting /usr/sbin/grub-install to /bin/true for the
+# duration of the build, then restoring it. The image's ESP keeps its existing
+# bootloader (already correct from upstream); grub-install runs normally on the
+# booted VM where /boot/efi is properly mounted.
+#
+# Self-gated on dpkg-divert presence, so non-apt distros (Alpine, RHEL, SUSE)
+# silently skip the wrapper.
+_GRUB_INSTALL_DIVERT_ENABLE = (
+    "if command -v dpkg-divert >/dev/null 2>&1 && [ -f /usr/sbin/grub-install ]; then "
+    "dpkg-divert --quiet --local --rename --add /usr/sbin/grub-install && "
+    "ln -sf /bin/true /usr/sbin/grub-install; "
+    "fi"
+)
+_GRUB_INSTALL_DIVERT_DISABLE = (
+    "if [ -L /usr/sbin/grub-install ] && [ \"$(readlink /usr/sbin/grub-install)\" = /bin/true ]; then "
+    "rm /usr/sbin/grub-install && "
+    "dpkg-divert --quiet --local --rename --remove /usr/sbin/grub-install; "
+    "fi"
+)
+
 
 def validate_template_name(name: str) -> None:
     """
@@ -398,14 +424,20 @@ class TemplateManager:
                 )
                 self.logger.info(f"Successfully resized {template.name} to {template.min_size}")
 
-                # If grow_partition is specified, grow the partition and filesystem
+                # If grow_partition is specified, grow the partition and filesystem.
+                # Special value "0" means the image has no partition table (whole-disk
+                # filesystem, e.g. Alpine nocloud images) — skip growpart, resize fs directly.
                 if template.grow_partition:
                     self.logger.info(f"Growing partition {template.grow_partition} in {template.name}")
                     part_num = template.grow_partition
-                    # Build growpart command that tries both sda and vda
-                    grow_cmd = f"growpart /dev/sda {part_num} || growpart /dev/vda {part_num} || echo 'growpart done'"
-                    # Build filesystem resize command (try xfs first, then ext4)
-                    resize_cmd = f"xfs_growfs / || resize2fs /dev/sda{part_num} || resize2fs /dev/vda{part_num} || echo 'resize done'"
+                    if part_num == "0":
+                        grow_cmd = "true"
+                        resize_cmd = "resize2fs /dev/sda || resize2fs /dev/vda || echo 'resize done'"
+                    else:
+                        # Build growpart command that tries both sda and vda
+                        grow_cmd = f"growpart /dev/sda {part_num} || growpart /dev/vda {part_num} || echo 'growpart done'"
+                        # Build filesystem resize command (try xfs first, then ext4)
+                        resize_cmd = f"xfs_growfs / || resize2fs /dev/sda{part_num} || resize2fs /dev/vda{part_num} || echo 'resize done'"
 
                     try:
                         subprocess.run(
@@ -653,6 +685,14 @@ class TemplateManager:
                 "--run-command",
                 "sed -i 's/^#*PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config"
             ])
+
+        # Wrap everything in grub-install divert/restore — see comment near
+        # _GRUB_INSTALL_DIVERT_ENABLE for the libguestfs ESP-mount issue this works around.
+        commands = (
+            ["--run-command", _GRUB_INSTALL_DIVERT_ENABLE]
+            + commands
+            + ["--run-command", _GRUB_INSTALL_DIVERT_DISABLE]
+        )
 
         process = None
         try:

@@ -221,7 +221,8 @@
         },
         "alpine-3-23": {
             "image_url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/nocloud_alpine-3.23.3-x86_64-bios-cloudinit-r0.qcow2",
-            "min_size": "1G",
+            "min_size": "2G",
+            "grow_partition": "0",
             "uses": [
                 "shell",
                 "timezone",
